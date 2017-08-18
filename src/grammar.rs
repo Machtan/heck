@@ -2,6 +2,15 @@
 //! grammar.
 use pest::prelude::*;
 
+const DEBUG_REDUCER: bool = false;
+
+#[inline(always)]
+fn print(msg: &str) {
+    if DEBUG_REDUCER {
+        println!("{}", msg);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Pat {
     Rule(String),
@@ -14,6 +23,96 @@ pub enum Pat {
     AnyOf(Vec<Pat>),
     Loop(Box<Pat>),
     BreakOnToken(GrammarToken),
+}
+impl Pat {
+    pub fn fmt(&self) -> String {
+        let mut s = String::new();
+        self.fmt_acc(&mut s);
+        s
+    }
+    fn fmt_acc(&self, s: &mut String) {
+        use self::Pat::*;
+        match *self {
+            Rule(ref name) => {
+                s.push('\'');
+                s.push_str(name);
+                s.push('\'');
+            }
+            Token(GrammarToken::Str(ref inner)) => {
+                s.push_str(&format!("{:?}", inner));
+            }
+            Token(GrammarToken::Re(ref inner)) => {
+                s.push_str("r#");
+                s.push_str(&format!("{:?}", inner));
+                s.push('#');
+            }
+            Seq(ref pats) => {
+                let last = pats.len() - 1;
+                s.push('(');
+                for (i, pat) in pats.iter().enumerate() {
+                    pat.fmt_acc(s);
+                    if i != last {
+                        s.push(' ');
+                    }
+                }
+                s.push(')');
+            }
+            Cap(cap, ref pat) => {
+                s.push('$');
+                match cap {
+                    Capture::Unnamed => {},
+                    Capture::Shared(group) => {
+                        for i in 0..group+1 {
+                            s.push('$');
+                        }
+                    }
+                    Capture::Assigned(index) => {
+                        s.push_str(&index.to_string());
+                    }
+                }
+                s.push('<');
+                pat.fmt_acc(s);
+                s.push('>');
+            }
+            Opt(ref pat) => {
+                pat.fmt_acc(s);
+                s.push('?');
+            }
+            ZeroPlus(ref pat) => {
+                pat.fmt_acc(s);
+                s.push('*');
+            }
+            OnePlus(ref pat) => {
+                pat.fmt_acc(s);
+                s.push('+');
+            }
+            AnyOf(ref pats) => {
+                s.push('(');
+                let last = pats.len() - 1;
+                for (i, pat) in pats.iter().enumerate() {
+                    pat.fmt_acc(s);
+                    if i != last {
+                        s.push_str(" | ");
+                    }
+                }
+                s.push(')');
+            }
+            Loop(ref pat) => {
+                pat.fmt_acc(s);
+                s.push('%');
+            }
+            BreakOnToken(GrammarToken::Str(ref inner)) => {
+                s.push_str(&format!("{:?}", inner));
+                s.push('!');
+            }
+            BreakOnToken(GrammarToken::Re(ref inner)) => {
+                s.push_str("r#");
+                s.push_str(&format!("{:?}", inner));
+                s.push('#');
+                s.push('!');
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -29,11 +128,12 @@ pub enum GrammarToken {
     Re(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Capture {
     Unnamed,
     Shared(usize),
-    Named(usize),
+    // This is assigned later, and not by the parser
+    Assigned(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +148,7 @@ pub enum Quantifier {
 /// Rules as returned from the parser (only structure, no semantics).
 pub type RawRules = Vec<(String, GrammarRule)>;
 
+// TODO: Stricter whitespace rules wrt captures and quantifiers
 impl_rdp! {
     grammar! {
         rules = { (newline | ruledef)+ }
@@ -71,9 +172,7 @@ impl_rdp! {
                         }
         pat_nl      =   { 
                             capture? 
-                            ~ newline*
                             ~ (token | rule_name | ["("] ~ pats_or_or_nl ~ [")"]) 
-                            ~ newline*
                             ~ quantifier?
                             ~ newline*
                         }
@@ -81,8 +180,7 @@ impl_rdp! {
         token       =  { str_token | regex_token }
         str_token   = @{ ["\""] ~ (["\\"] ~ any | !["\""] ~ any)* ~ ["\""] }
         regex_token = @{ ["r#\""] ~ (!["\"#"] ~ any)* ~ ["\"#"] }
-        number      = @{ ['0'..'9']+ }
-        capture     = @{ dollar ~ (dollar* | number)? }
+        capture     = @{ dollar ~ dollar* }
         
         dollar      =  { ["$"] }
         star        =  { ["*"] }
@@ -132,28 +230,29 @@ impl_rdp! {
         
         __pats_or_or(&self) -> Vec<Pat> {
             (_: patseq, pat: _patseq(), _: line, mut tail: __pats_or_or()) => {
-                println!("__pats_or_or:1");
+                print("__pats_or_or:1");
                 tail.push(pat);
                 tail
             },
             (_: patseq, pat: _patseq()) => {
-                println!("__pats_or_or:2");
+                print("__pats_or_or:2");
                 vec![pat]
             },
             (_: patseq_nl, pat: _patseq(), _: line, mut tail: __pats_or_or()) => {
-                println!("__pats_or_or:3");
+                print("__pats_or_or:3");
                 tail.push(pat);
                 tail
             },
             (_: patseq_nl, pat: _patseq()) => {
-                println!("__pats_or_or:4");
+                print("__pats_or_or:4");
                 vec![pat]
             }
         }
         
         _patseq(&self) -> Pat {
             (mut rev_pats: __patseq()) => {
-                println!("_patseq:1");
+                print("_patseq:1");
+                println!("_patseq({:?})", rev_pats);
                 let has_one = rev_pats.len() == 1;
                 if has_one {
                     rev_pats.pop().unwrap()
@@ -166,43 +265,44 @@ impl_rdp! {
         
         __patseq(&self) -> Vec<Pat> {
             (_: pat, head: _pat(), mut rev_pats: __patseq()) => {
-                println!("__patseq:1");
+                print("__patseq:1");
                 rev_pats.push(head);
                 rev_pats
             },
             (_: pat_nl, head: _pat(), mut rev_pats: __patseq()) => {
-                println!("__patseq:2");
+                print("__patseq:2");
                 rev_pats.push(head);
                 rev_pats
             },
             () => {
-                println!("__patseq:3");
+                print("__patseq:3");
                 Vec::new()
             }
         }
         
         _inner_pat(&self) -> Pat {
             (_: rule_name, name: _rule_name()) => {
-                println!("_inner_pat:1");
+                print("_inner_pat:1");
                 Pat::Rule(name)
             },
             (_: token, token: _token()) => {
-                println!("_inner_pat:2");
+                print("_inner_pat:2");
                 Pat::Token(token)
             },
             (_: pats_or_or, pat: _pats_or_or()) => {
-                println!("_inner_pat:3");
+                print("_inner_pat:3");
                 pat
             },
             (_: pats_or_or_nl, pat: _pats_or_or()) => {
-                println!("_inner_pat:4");
+                print("_inner_pat:4");
                 pat
             }
         }
         
         _pat(&self) -> Pat {
             (capture: _capture(), pat: _inner_pat(), quantifier: _quantifier()) => {
-                println!("_pat:1");
+                print("_pat:1");
+                println!("_pat(cap: {:?}, pat: {:?}, quantifier: {:?})", capture, pat, quantifier);
                 let pat = if let Some(quantifier) = quantifier {
                     match quantifier {
                         Quantifier::Opt => Pat::Opt(Box::new(pat)),
@@ -232,37 +332,33 @@ impl_rdp! {
         
         _dollars(&self) -> usize {
             (_: dollar, nof_dollars: _dollars()) => {
-                println!("_dollars:1");
+                print("_dollars:1");
                 nof_dollars + 1
             },
             () => {
-                println!("_dollars:2");
+                print("_dollars:2");
                 0
             }
         }
         
         _capture(&self) -> Option<Capture> {
-            (_: capture, _: dollar, &num: number) => {
-                println!("_capture:1");
-                Some(Capture::Named(num.parse().unwrap_or(0)))
-            },
             (_: capture, _: dollar, nof_dollars: _dollars()) => {
-                println!("_capture:2");
-                if nof_dollars > 0 {
+                print("_capture:2");
+                if nof_dollars == 0 {
                     Some(Capture::Unnamed)
                 } else {
-                    Some(Capture::Shared(nof_dollars + 1))
+                    Some(Capture::Shared(nof_dollars - 1))
                 }
             },
             () => {
-                println!("_capture:3");
+                print("_capture:3");
                 None
             }
         }
         
         _quantifier(&self) -> Option<Quantifier> {
             (_: quantifier, quantifier: _quantifier()) => {
-                println!("quantifier:1");
+                print("quantifier:1");
                 quantifier // unpack first, since it's optional
             },
             (_: qmark) => {

@@ -142,14 +142,14 @@ pub fn lex(text: &str, rules: &LexerRules) -> Result<Vec<Token>, String> {
     let mut found_tokens = Vec::new();
     let mut start = 0;
     while start < text.len() {
-        println!("{}:", start);
+        //println!("{}:", start);
         let slice = &text[start..];
         if let Some(ref subtrie) = literals.get_ancestor(slice) {
             let matched = subtrie.key().unwrap();
             let token_name = subtrie.value().unwrap();
             let end = start + matched.len();
             let token = Token::new(token_name.clone(), start, end);
-            println!("-> {}: {:?}", token_name, token.slice(text));
+            //println!("-> {}: {:?}", token_name, token.slice(text));
             if ! token_name.starts_with("_") {
                 found_tokens.push(token);
             }
@@ -161,7 +161,7 @@ pub fn lex(text: &str, rules: &LexerRules) -> Result<Vec<Token>, String> {
                     let s = start + m.start();
                     let e = start + m.end();
                     let token = Token::new(name.clone(), s, e);
-                    println!("-> {}: {:?}", name, token.slice(text));
+                    //println!("-> {}: {:?}", name, token.slice(text));
                     if ! name.starts_with("_") {
                         found_tokens.push(token);
                     }
