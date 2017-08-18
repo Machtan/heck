@@ -215,8 +215,17 @@ fn reorder_capture_indices(pat: Pat, good: &CaptureState, bad: &CaptureState) ->
                 Cap(Capture::Assigned(map[idx]), Box::new(inner(*boxed, map)))
             }
             Cap(_, _) => panic!("NONONONONONO"),
-            Opt(boxed) | ZeroPlus(boxed) | OnePlus(boxed) | Loop(boxed) => {
+            Opt(boxed) => {
                 Opt(Box::new(inner(*boxed, map)))
+            }
+            ZeroPlus(boxed) => {
+                ZeroPlus(Box::new(inner(*boxed, map)))
+            }
+            OnePlus(boxed) => {
+                OnePlus(Box::new(inner(*boxed, map)))
+            }
+            Loop(boxed) => {
+                Loop(Box::new(inner(*boxed, map)))
             }
             AnyOf(pats) => {
                 AnyOf(pats.into_iter().map(|p| inner(p, map)).collect())
