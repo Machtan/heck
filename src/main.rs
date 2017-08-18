@@ -50,14 +50,6 @@ expr:   $(INT | FLOAT | STRING | array | inline_table | TRUE | FALSE)
 entry:  $key "=" $expr
 inline_table: "{" endl* "}"! $$entry "}"! ("," endl* "}"! $$entry endl* "}"!)%
 
-derp: ($KEY?)+
-herp: ($$KEY?)+
-burp: ($KEY|$KEY)+
-lurp: (($KEY|$KEY)? )+
-bob:  ($$KEY?)+
-blub: (($$KEY|$$KEY)? )+
-birb: (($$KEY)? end)+
-burb: (end ($$KEY)? end)+
 
 document:   (($$entry | $$scope)? end)+
 
@@ -380,8 +372,8 @@ fn find_parser_rules(rules: &RawRules) -> ParserRules {
     }) {
         println!("Assigning rule {:?}...", name);
         println!("  {}", rule.pat.fmt());
-        /*let parser_rule = find_and_assign_captures(rule.pat);
-        parser_rules.insert(name, parser_rule);*/
+        let parser_rule = find_and_assign_captures(rule.pat);
+        parser_rules.insert(name, parser_rule);
         println!("");
     }
     parser_rules
@@ -448,7 +440,7 @@ fn main() {
     parse_and_print!(STRING, str_token, _token);
     parse_and_print!(ESCAPED_QUOTE, str_token, _token);
     parse_and_print!(TOML_GRAMMAR, rules, main);*/
-    let raw_rules = parse_rules(GRAMMAR).expect("Could not parse TOML grammar");
+    let raw_rules = parse_rules(TOML_GRAMMAR).expect("Could not parse TOML grammar");
     let lexer_rules = find_lexer_rules(&raw_rules);
     println!("Token definitions:");
     for def in &lexer_rules {
@@ -463,8 +455,24 @@ fn main() {
     println!("");
     println!("Parser rules:");
     for (name, rule) in &parser_rules {
-        println!("{}({:?})", name, rule.captures);
-        println!("  pat: {}", rule.pat.fmt());
+        if rule.captures.is_empty() {
+            println!("{}()", name);
+            continue;
+        }
+        print!("{}(", name);
+        let last = rule.captures.len() - 1;
+        for (i, &cap) in rule.captures.iter().enumerate() {
+            match cap {
+                CaptureType::Single => print!("arg"),
+                CaptureType::Optional => print!("arg?"),
+                CaptureType::Multiple => print!("[args]"),
+            }
+            if i != last {
+                print!(", ");
+            }
+        }
+        println!(")");
+        println!("  -> {}", rule.pat.fmt());
     }
     //parse_with_rules(&tokens, &parser_rules, "document");
 }
