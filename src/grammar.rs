@@ -167,12 +167,12 @@ impl_rdp! {
         pats_or_or_nl = { newline* ~ patseq_nl ~ (newline* ~ line ~ newline* ~ patseq_nl)* ~ newline* }
         pat         =   { 
                             capture?
-                            ~ (token | rule_name | PAROPEN ~ pats_or_or_nl ~ PARCLOSE) 
+                            ~ (token | rule_name | paropen ~ pats_or_or_nl ~ parclose) 
                             ~ quantifier? 
                         }
         pat_nl      =   { 
                             capture? 
-                            ~ (token | rule_name | PAROPEN ~ pats_or_or_nl ~ PARCLOSE) 
+                            ~ (token | rule_name | paropen ~ pats_or_or_nl ~ parclose) 
                             ~ quantifier?
                             ~ newline*
                         }
@@ -182,8 +182,8 @@ impl_rdp! {
         regex_token = @{ ["r#\""] ~ (!["\"#"] ~ any)* ~ ["\"#"] }
         capture     = @{ dollar ~ dollar* }
         
-        PAROPEN     =  { ["("] }
-        PARCLOSE    =  { [")"] }
+        paropen     =  { ["("] }
+        parclose    =  { [")"] }
         dollar      =  { ["$"] }
         star        =  { ["*"] }
         qmark       =  { ["?"] }
@@ -295,7 +295,7 @@ impl_rdp! {
                 print("_inner_pat:3");
                 pat
             },
-            (_: PAROPEN, _: pats_or_or_nl, pat: _pats_or_or(), _: PARCLOSE) => {
+            (_: paropen, _: pats_or_or_nl, pat: _pats_or_or(), _: parclose) => {
                 print("_inner_pat:4");
                 pat
             },
