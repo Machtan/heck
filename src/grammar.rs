@@ -16,7 +16,7 @@ pub enum Pat {
     Rule(String),
     Token(GrammarToken),
     Seq(Vec<Pat>),
-    Cap(Capture, Box<Pat>),
+    Cap(CaptureInfo, Box<Pat>),
     Opt(Box<Pat>),
     ZeroPlus(Box<Pat>),
     OnePlus(Box<Pat>),
@@ -60,13 +60,13 @@ impl Pat {
             Cap(cap, ref pat) => {
                 s.push('$');
                 match cap {
-                    Capture::Unnamed => {},
-                    Capture::Shared(group) => {
+                    CaptureInfo::Unnamed => {},
+                    CaptureInfo::Shared(group) => {
                         for i in 0..group+1 {
                             s.push('$');
                         }
                     }
-                    Capture::Assigned(index) => {
+                    CaptureInfo::Assigned(index) => {
                         s.push_str(&index.to_string());
                     }
                 }
@@ -129,7 +129,7 @@ pub enum GrammarToken {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Capture {
+pub enum CaptureInfo {
     Unnamed,
     Shared(usize),
     // This is assigned later, and not by the parser
@@ -347,13 +347,13 @@ impl_rdp! {
             }
         }
         
-        _capture(&self) -> Option<Capture> {
+        _capture(&self) -> Option<CaptureInfo> {
             (_: capture, _: dollar, nof_dollars: _dollars()) => {
                 print("_capture:2");
                 if nof_dollars == 0 {
-                    Some(Capture::Unnamed)
+                    Some(CaptureInfo::Unnamed)
                 } else {
-                    Some(Capture::Shared(nof_dollars - 1))
+                    Some(CaptureInfo::Shared(nof_dollars - 1))
                 }
             },
             () => {

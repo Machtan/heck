@@ -1,7 +1,7 @@
-//! Capture assignment code.
+//! CaptureInfo assignment code.
 //! Finds out how many time a 'captured' pattern inside a rule is matched, and
 //! find out how many captures and in which order they appear.
-use grammar::{Capture, Pat};
+use grammar::{CaptureInfo, Pat};
 use std::cmp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -9,12 +9,6 @@ pub enum CaptureType {
     Single,
     Optional,
     Multiple,
-}
-
-#[derive(Debug, Clone)]
-pub struct ParserRule {
-    pub pat: Pat,
-    pub captures: Vec<CaptureType>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,8 +116,8 @@ fn reorder_capture_indices(pat: Pat, good: &CaptureState, bad: &CaptureState) ->
             Seq(pats) => {
                 Seq(pats.into_iter().map(|p| inner(p, map)).collect())
             }
-            Cap(Capture::Assigned(idx), boxed) => {
-                Cap(Capture::Assigned(map[idx]), Box::new(inner(*boxed, map)))
+            Cap(CaptureInfo::Assigned(idx), boxed) => {
+                Cap(CaptureInfo::Assigned(map[idx]), Box::new(inner(*boxed, map)))
             }
             Cap(_, _) => panic!("NONONONONONO"),
             Opt(boxed) => {
@@ -153,7 +147,7 @@ enum CaptureContext {
     Repetition,
 }
 
-pub fn find_and_assign_captures(pat: Pat) -> ParserRule {
+pub fn find_and_assign_captures(pat: Pat) -> (Vec<CaptureType>, Pat) {
     fn is_single(pat: &Pat) -> bool {
         match *pat {
             Pat::Token(_) | Pat::Rule(_) => true,
@@ -170,9 +164,9 @@ pub fn find_and_assign_captures(pat: Pat) -> ParserRule {
             }
             Cap(captype, boxed) => {
                 let group = match captype {
-                    Capture::Unnamed => None,
-                    Capture::Shared(idx) => Some(idx),
-                    Capture::Assigned(_) => {
+                    CaptureInfo::Unnamed => None,
+                    CaptureInfo::Shared(idx) => Some(idx),
+                    CaptureInfo::Assigned(_) => {
                         panic!("find_and_assign_captures called on a pattern whose captures were already assigned!");
                     }
                 };
@@ -211,7 +205,7 @@ pub fn find_and_assign_captures(pat: Pat) -> ParserRule {
                 
                 let id = state.assign(group, actual);
                 let new_cap_pat = inner(*boxed, context, state);
-                Cap(Capture::Assigned(id), Box::new(new_cap_pat))
+                Cap(CaptureInfo::Assigned(id), Box::new(new_cap_pat))
             }
             Opt(boxed) => {
                 Opt(Box::new(if let CaptureContext::Repetition = context {
@@ -274,8 +268,5 @@ pub fn find_and_assign_captures(pat: Pat) -> ParserRule {
     };
     let context = CaptureContext::Free;
     let assigned_pat = inner(pat, context, &mut state);
-    ParserRule {
-        pat: assigned_pat,
-        captures: state.capture_types,
-    }
+    (state.capture_types, assigned_pat)
 }
