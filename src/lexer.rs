@@ -137,6 +137,10 @@ pub fn lex(text: &str, rules: &LexerRules) -> Result<Vec<Token>, String> {
                 };
                 regexes.push((reg, Rc::new(regex.clone())));
             }
+            _ => {
+                return Err(format!("TokenDef contained a 'GrammarToken::Named' \
+                    value, which shouldn't be possible"))
+            }
         }
     }
     let mut found_tokens = Vec::new();

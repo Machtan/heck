@@ -50,7 +50,7 @@ INT:        r#"(?:\+|-)[0-9](_?[0-9])*"#
 key:    $(KEY | STRING)
 endl:   NEWLINE
 end:    (EOF | NEWLINE)
-scope:  "[" $$key ( "." $$key )* "]" end
+scope:  "[" $$key ( "." $$key )* "]"
 array:  "[" endl* "]"! $$expr "]"! ("," endl* "]"! $$expr endl* "]"!)%
 expr:   $(INT | FLOAT | STRING | array | inline_table | TRUE | FALSE)
 entry:  $key "=" $expr
@@ -101,7 +101,45 @@ pub struct ParserRule {
 /// Rules that tells the parsing function how to combine tokens into structure.
 pub type ParserRules = HashMap<String, ParserRule>;
 
-
+// Changes all UPPERCASE rules to named tokens, and all literal tokens to
+// named tokens as well.
+fn assign_token_names(pat: Pat) -> Pat {
+    use grammar::Pat::*;
+    match pat {
+        Rule(name) => {
+            if is_token_id(&name) {
+                Token(GrammarToken::Named(name))
+            } else {
+                Rule(name)
+            }
+        }
+          Token(GrammarToken::Str(s)) 
+        | Token(GrammarToken::Re(s)) => {
+            Token(GrammarToken::Named(s))
+        }
+        Token(GrammarToken::Named(_)) => {
+            pat // is it an err to be silent? I mean, the result is correct :p
+        }
+        AnyOf(pats) => {
+            AnyOf(pats.into_iter().map(assign_token_names).collect())
+        }
+        Seq(pats) => {
+            Seq(pats.into_iter().map(assign_token_names).collect())
+        }
+        Opt(ipat) => Opt(Box::new(assign_token_names(*ipat))),
+        Cap(cap, ipat) => Cap(cap, Box::new(assign_token_names(*ipat))),
+        ZeroPlus(ipat) => ZeroPlus(Box::new(assign_token_names(*ipat))),
+        OnePlus(ipat) => OnePlus(Box::new(assign_token_names(*ipat))),
+        Loop(ipat) => Loop(Box::new(assign_token_names(*ipat))),
+          BreakOnToken(GrammarToken::Str(s)) 
+        | BreakOnToken(GrammarToken::Re(s)) => {
+            BreakOnToken(GrammarToken::Named(s))
+        }
+        BreakOnToken(GrammarToken::Named(_)) => {
+            pat
+        }
+    }
+}
 
 fn find_parser_rules(rules: &RawRules) -> ParserRules {
     let mut parser_rules = HashMap::new();
@@ -114,12 +152,13 @@ fn find_parser_rules(rules: &RawRules) -> ParserRules {
     }) {
         println!("Assigning rule {:?}...", name);
         println!("  {}", rule.pat.fmt());
-        let (captures, assigned_pat) = find_and_assign_captures(rule.pat);
+        let (captures, pat_with_captures) = find_and_assign_captures(rule.pat);
         // Clean up the pat by changing tokens to named tokens, and
+        let pat_with_tokens = assign_token_names(pat_with_captures);
         // TOKEN rules to named tokens as well.
         let rule = ParserRule {
             name: Rc::new(name.clone()),
-            pat: assigned_pat,
+            pat: pat_with_tokens,
             captures: captures,
         };
         parser_rules.insert(name, rule);
@@ -218,68 +257,101 @@ enum ParseAction {
 }
 
 /// Returns whether the given token can be matched or ignored by the given pattern.
-fn action_when_parsed<'a>(mut pat: &'a Pat, token: &Token, rules: &'a ParserRules, 
-    mut indent: usize) -> ParseAction 
+fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules, 
+    indent: usize) -> ParseAction 
 {
     use grammar::Pat::*;
     use self::ParseAction::*;
-    loop {
-        let pad = iter::repeat(" ").take(indent).collect::<String>();
-        println!("{}Action when parsed({}: <{}>)", pad, pat.fmt(), token.name);
-        match *pat {
-              Token(GrammarToken::Str(ref s)) 
-            | Token(GrammarToken::Re(ref s)) => {
-                return if token.name.deref() == s {
-                    MatchesToken
-                } else {
-                    CannotParse
-                };
-            }
-            BreakOnToken(GrammarToken::Str(ref s))
-            | BreakOnToken(GrammarToken::Re(ref s)) => {
-                return if token.name.deref() == s {
-                    MatchesToken
-                } else {
-                    IsOptional
-                };
-            }
-            Rule(ref name) => {
-                pat = &rules.get(name).expect("Rule not found!").pat;
-                indent += 2;
-            }
-            Seq(ref pats) => {
-                for pat in pats {
-                    match action_when_parsed(pat, token, rules, indent+2) {
-                        MatchesToken => return MatchesToken,
-                        IsOptional => {}
-                        CannotParse => return CannotParse,
+    macro_rules! prindent {
+        ($($e:expr),*) => {{
+            let pad = iter::repeat(" ").take(indent).collect::<String>();
+            println!("{}{}", pad, format!($($e),*));
+        }}
+    }
+    prindent!("<{}> => {})", token.name, pat.fmt());
+    match *pat {
+        Token(GrammarToken::Named(ref name)) => {
+            let res = if token.name.deref() == name {
+                MatchesToken
+            } else {
+                CannotParse
+            };
+            prindent!("-> {:?}", res);
+            res
+        }
+        Token(_) => { 
+            panic!("Attempted parse without assigning token names"); 
+        }
+        BreakOnToken(GrammarToken::Named(ref name)) => {
+            let res = if token.name.deref() == name {
+                MatchesToken
+            } else {
+                IsOptional
+            };
+            prindent!("-> {:?}", res);
+            res
+        }
+        BreakOnToken(_) => {
+            panic!("Attempted parse without assigning token names");
+        }
+        Rule(ref name) => {
+            let pat = &rules.get(name).expect("Rule not found!").pat;
+            let res = action_when_parsed(pat, token, rules, indent + 2);
+            prindent!("-> {:?}", res);
+            res
+        }
+        Seq(ref pats) => {
+            for pat in pats {
+                match action_when_parsed(pat, token, rules, indent+2) {
+                    MatchesToken => {
+                        prindent!("-> MatchesToken");
+                        return MatchesToken;
+                    }
+                    IsOptional => {}
+                    CannotParse => {
+                        prindent!("-> CannotParse");
+                        return CannotParse;
                     }
                 }
-                return IsOptional;
             }
-            AnyOf(ref pats) => {
-                for pat in pats {
-                    match action_when_parsed(pat, token, rules, indent+2) {
-                        MatchesToken => return MatchesToken,
-                        // This is the correct semantics, ignoring a branch that 
-                        // matches the token, if an optional branch is found first
-                        IsOptional => return IsOptional,
-                        CannotParse => {}
+            prindent!("-> IsOptional");
+            IsOptional
+        }
+        AnyOf(ref pats) => {
+            let mut opt_found = false;
+            for pat in pats {
+                match action_when_parsed(pat, token, rules, indent+2) {
+                    MatchesToken => {
+                        prindent!("-> MatchesToken");
+                        return MatchesToken;
                     }
+                    // This is the correct semantics, ignoring a branch that 
+                    // matches the token, if an optional branch is found first
+                    IsOptional => opt_found = true,
+                    CannotParse => {}
                 }
-                return CannotParse;
             }
-            Opt(ref optpat) | ZeroPlus(ref optpat) => {
-                return if let MatchesToken = action_when_parsed(optpat, token, rules, indent+2) {
-                    MatchesToken
-                } else {
-                    IsOptional
-                };
-            }
-            OnePlus(ref ipat) | Cap(_, ref ipat) | Loop(ref ipat) => {
-                pat = ipat;
-                indent += 2;
-            }
+            let res = if opt_found {
+                IsOptional
+            } else {
+                CannotParse
+            };
+            prindent!("-> {:?}", res);
+            res
+        }
+        Opt(ref optpat) | ZeroPlus(ref optpat) => {
+            let res = if let MatchesToken = action_when_parsed(optpat, token, rules, indent+2) {
+                MatchesToken
+            } else {
+                IsOptional
+            };
+            prindent!("-> {:?}", res);
+            res
+        }
+        OnePlus(ref ipat) | Cap(_, ref ipat) | Loop(ref ipat) => {
+            let res = action_when_parsed(ipat, token, rules, indent + 2);
+            prindent!("-> {:?}", res);
+            res
         }
     }
 }
@@ -330,15 +402,18 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
         },
         // This could technically conflict since the same namespace is used for
         // unnamed str and unnamed regex patterns.
-        Token(GrammarToken::Str(ref s)) | Token(GrammarToken::Re(ref s)) => {
+        Token(GrammarToken::Named(ref name)) => {
             let token = advance(tokens)?;
-            if token.name.deref() == s {
+            if token.name.deref() == name {
                 if let Some(idx) = cap_idx {
                     caps[idx].assign(token);
                 }
             } else {
-                return error(&format!("literal {:?}", s), token, ctx);
+                return error(&format!("token <{}>", name), token, ctx);
             }
+        }
+        Token(_) => { 
+            panic!("Attempted parse without assigning token names"); 
         }
         Seq(ref pats) => {
             for pat in pats {
@@ -375,15 +450,17 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
                 return Err(format!("Unexpected EOF!")); 
             }
             let mut pat_found = false;
+            // parse with the first branch that can consume the token.
             for pat in pats {
                 match action_when_parsed(pat, tokens.peek().unwrap(), rules, 0) {
-                    MatchesToken | IsOptional => {
+                    MatchesToken => {
                         if let Some(Break) = parse_with_pattern(pat, cap_idx, caps, rules, tokens, ctx)? {
                             return Ok(Some(Break));
                         }
                         pat_found = true;
                         break;
                     }
+                    IsOptional => pat_found = true,
                     CannotParse => {}
                 }
             }
@@ -391,14 +468,12 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
                 let mut joined = String::new();
                 let last = pats.len() - 1;
                 for (i, pat) in pats.iter().enumerate() {
-                    joined.push('\'');
                     joined.push_str(&pat.fmt());
-                    joined.push('\'');
                     if i != last {
                         joined.push_str(" or ");
                     }
                 }
-                return error(&format!("Either {}", joined), tokens.next().unwrap(), ctx);
+                return error(&format!("either {}", joined), tokens.next().unwrap(), ctx);
             }
         }
         Loop(ref pat) => {
@@ -417,12 +492,15 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
             let scope = ctx.scope.iter().flat_map(|s| Some('.').into_iter().chain(s.chars())).skip(1).collect::<String>();
             return Err(format!("{}:{}:{}: Unclosed loop expression", scope, line, col));
         }
-        BreakOnToken(GrammarToken::Str(ref s)) | BreakOnToken(GrammarToken::Re(ref s)) => {
-            if let Some(peek) = tokens.peek() {
-                if peek.name.deref() == s {
-                    return Ok(Some(Break));
-                }
-            }
+        BreakOnToken(GrammarToken::Named(ref name)) => {
+            let should_break = tokens.peek().map_or(false, |peek| peek.name.deref() == name);
+            if should_break {
+                tokens.next().unwrap();
+                return Ok(Some(Break));
+            } 
+        }
+        BreakOnToken(_) => { 
+            panic!("Attempted parse without assigning token names"); 
         }
         Cap(_, _) => return Err(format!("Found a capture inside another capture!")),
     }

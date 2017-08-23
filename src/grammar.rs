@@ -46,6 +46,11 @@ impl Pat {
                 s.push_str(&format!("{:?}", inner));
                 s.push('#');
             }
+            Token(GrammarToken::Named(ref inner)) => {
+                s.push('<');
+                s.push_str(inner); // add '<>' ?
+                s.push('>');
+            }
             Seq(ref pats) => {
                 let last = pats.len() - 1;
                 s.push('(');
@@ -111,6 +116,12 @@ impl Pat {
                 s.push('#');
                 s.push('!');
             }
+            BreakOnToken(GrammarToken::Named(ref inner)) => {
+                s.push('<');
+                s.push_str(inner);
+                s.push('>');
+                s.push('!');
+            }
         }
     }
 }
@@ -126,13 +137,15 @@ pub struct GrammarRule {
 pub enum GrammarToken {
     Str(String),
     Re(String),
+    // Stage 2: This is a post-parsing variant
+    Named(String),
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum CaptureInfo {
     Unnamed,
     Shared(usize),
-    // This is assigned later, and not by the parser
+    // Stage 2: This is assigned later, and not by the parser
     Assigned(usize),
 }
 
