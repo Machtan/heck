@@ -19,7 +19,8 @@ use pest::{StringInput, Parser};
 use lexer::{find_lexer_rules, lex};
 use std::iter;
 use captures::{CaptureType};
-use parser::{find_parser_rules, parse_with_rules};
+use parser::{find_parser_rules, parse_with_rules, Match};
+use std::collections::HashMap;
 //use std::slice::SliceConcatExt;
 
 /*
@@ -139,6 +140,118 @@ macro_rules! parse_and_print {
     }
 }
 
+type TomlTable = HashMap<String, TomlValue>;
+
+#[derive(Debug, Clone)]
+pub enum TomlValue {
+    Int(i64),
+    Float(f64),
+    Str(String),
+    Bool(bool),
+    Array(Vec<TomlValue>),
+    Table(TomlTable),
+}
+
+type TomlResult<T> = Result<T, String>;
+
+fn with_scope<'a, F: FnOnce(&'a mut TomlTable), I: Iterator<Item=S>, S: ToString> (table: &'a mut TomlTable, mut path: I, f: F) {
+    match path.next() {
+        None => {
+            f(table)
+        }
+        Some(key) => {
+            let next = table.entry(key.to_string()).or_insert_with(|| TomlValue::Table(TomlTable::new()));
+            if let &mut TomlValue::Table(ref mut table) = next {
+                with_scope(table, path, f);
+            } else {
+                panic!("Scope element is not table :c");
+            }
+        }
+    }
+}
+
+// TODO: if I want it to parse 'real' toml :p
+fn clean_string(s: &str) -> String {
+    s.to_string()
+}
+
+fn reduce_key(m: &Match, source: &str) -> String {
+    let m = m.single(0).unwrap();
+    match m.rule.as_str() {
+        "STRING" => clean_string(m.token().unwrap().slice(source)),
+        "KEY" => m.token().unwrap().slice(source).to_string(),
+        _ => unreachable!(),
+    }
+}
+
+fn reduce_inline_table(m: &Match, source: &str) -> TomlResult<TomlValue> {
+    let mut table = TomlTable::new();
+    for res in m.multiple(0).unwrap().into_iter().map(|m| reduce_entry(m, source)) {
+        let (k, v) = res?;
+        table.insert(k, v);
+        // TODO: ensure keys only added once.
+    }
+    Ok(TomlValue::Table(table))
+}
+
+fn reduce_array(m: &Match, source: &str) -> TomlResult<TomlValue> {
+    let mut arr = Vec::new();
+    for res in m.multiple(0).unwrap().into_iter().map(|m| reduce_expr(m, source)) {
+        arr.push(res?);
+    }
+    Ok(TomlValue::Array(arr))
+}
+
+fn reduce_expr(m: &Match, source: &str) -> TomlResult<TomlValue> {
+    let m = m.single(0).unwrap();
+    Ok(match m.rule.as_str() {
+        "INT" => {
+            TomlValue::Int(m.token().unwrap().slice(source).parse().expect("Invalid int :c"))
+        }
+        "FLOAT" => {
+            TomlValue::Float(m.token().unwrap().slice(source).parse().expect("Invalid float :c"))
+        }
+        "STRING" => {
+            TomlValue::Str(clean_string(m.token().unwrap().slice(source)))
+        }
+        "array" => reduce_array(m, source)?,
+        "inline_table" => reduce_inline_table(m, source)?,
+        "TRUE" => TomlValue::Bool(true),
+        "FALSE" => TomlValue::Bool(false),
+        _ => unreachable!(),
+    })
+}
+
+fn reduce_entry(m: &Match, source: &str) -> TomlResult<(String, TomlValue)> {
+    let key = reduce_key(m.single(0).unwrap(), source);
+    let value = reduce_expr(m.single(1).unwrap(), source)?;
+    Ok((key, value))
+}
+
+fn reduce_scope(m: &Match, source: &str) -> Vec<String> {
+    m.multiple(0).unwrap().into_iter().map(|m| reduce_key(m, source)).collect()
+}
+
+fn reduce_document(m: &Match, source: &str) -> TomlResult<TomlTable> {
+    let mut table = HashMap::new();
+    let mut scope = Vec::new();
+    for tlitem in m.multiple(0).unwrap() {
+        match tlitem.rule.as_str() {
+            "scope" => {
+                scope = reduce_scope(tlitem, source);
+            }
+            "entry" => {
+                let (key, val) = reduce_entry(tlitem, source)?;
+                with_scope(&mut table, scope.iter(), |table| {
+                    table.insert(key, val);
+                });
+            }
+            _ => unreachable!(),
+        }
+    }
+    Ok(table)
+}
+
 fn main() {
     /*parse_and_print!(PLAIN_RULE, rule_name, _rule_name);
     parse_and_print!(QUOTED_RULE, rule_name, _rule_name);
@@ -183,4 +296,6 @@ fn main() {
     let mtc = parse_with_rules("document", &parser_rules, tokens, TOML_FILE)
         .expect("Could not parse TOML document");
     println!("Match: {:#?}", mtc);
+    let document = reduce_document(&mtc, TOML_FILE).expect("Invalid document");
+    println!("Document: {:#?}", document);
 }

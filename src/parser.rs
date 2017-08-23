@@ -6,7 +6,7 @@ use grammar::{Pat, CaptureInfo, GrammarToken, RawRules};
 use lexer::{self, Token};
 use std::iter::{self, Peekable};
 use std::vec;
-use std::ops::Deref;
+use std::ops::{Deref};
 use captures::{CaptureType, find_and_assign_captures};
 
 
@@ -27,14 +27,14 @@ fn assign_token_names(pat: Pat) -> Pat {
     match pat {
         Rule(name) => {
             if is_token_id(&name) {
-                Token(GrammarToken::Named(name))
+                Token(GrammarToken::Named(Rc::new(name)))
             } else {
                 Rule(name)
             }
         }
           Token(GrammarToken::Str(s)) 
         | Token(GrammarToken::Re(s)) => {
-            Token(GrammarToken::Named(s))
+            Token(GrammarToken::Named(Rc::new(s)))
         }
         Token(GrammarToken::Named(_)) => {
             pat // is it an err to be silent? I mean, the result is correct :p
@@ -52,7 +52,7 @@ fn assign_token_names(pat: Pat) -> Pat {
         Loop(ipat) => Loop(Box::new(assign_token_names(*ipat))),
           BreakOnToken(GrammarToken::Str(s)) 
         | BreakOnToken(GrammarToken::Re(s)) => {
-            BreakOnToken(GrammarToken::Named(s))
+            BreakOnToken(GrammarToken::Named(Rc::new(s)))
         }
         BreakOnToken(GrammarToken::Named(_)) => {
             pat
@@ -87,42 +87,30 @@ pub fn find_parser_rules(rules: &RawRules) -> ParserRules {
 }
 
 #[derive(Debug, Clone)]
-pub enum CaptureValue {
-    Token(Token),
-    Match(Box<Match>),
-}
-impl From<Token> for CaptureValue {
-    fn from(value: Token) -> CaptureValue {
-        CaptureValue::Token(value)
-    }
-}
-impl From<Match> for CaptureValue {
-    fn from(value: Match) -> CaptureValue {
-        CaptureValue::Match(Box::new(value))
-    }
-}
-
-#[derive(Debug, Clone)]
 pub enum Capture {
-    Single(CaptureValue),
-    Optional(Option<CaptureValue>),
-    Multiple(Vec<CaptureValue>),
+    Single(Box<Match>),
+    Optional(Option<Box<Match>>),
+    Multiple(Vec<Match>),
+    Token(Token),
 }
 impl Capture {
-    pub fn assign<V: Into<CaptureValue>>(&mut self, value: V) {
+    pub fn assign(&mut self, value: Match) {
         use self::Capture::*;
         match *self {
             Single(_) => {
-                *self = Single(value.into());
+                *self = Single(Box::new(value));
             }
             Optional(None) => {
-                *self = Optional(Some(value.into()));
+                *self = Optional(Some(Box::new(value)));
             }
             Optional(Some(_)) => {
                 panic!("Optional value assigned twice!");
             }
             Multiple(ref mut values) => {
-                values.push(value.into());
+                values.push(value);
+            }
+            Token(_) => {
+                unreachable!();
             }
         }
     }
@@ -143,7 +131,10 @@ impl Match {
                     Single => {
                         // Use a dummy value, since this should always have been 
                         // overwritten once a parse has finished succesfully
-                        Capture::Single(CaptureValue::Token(Token::new(Rc::new("<UNASSIGNED>".to_string()), 0, 0)))
+                        Capture::Single(Box::new(Match {
+                            rule: Rc::new("".to_string()),
+                            captures: Vec::new(),
+                        }))
                     }
                     Optional => {
                         Capture::Optional(None)
@@ -153,6 +144,50 @@ impl Match {
                     }
                 }
             }).collect()
+        }
+    }
+    
+    pub fn single(&self, index: usize) -> Option<&Match> {
+        if index >= self.captures.len() { 
+            return None;
+        }
+        if let Capture::Single(ref val) = self.captures[index] {
+            Some(val)
+        } else {
+            None
+        }
+    }
+    
+    pub fn optional(&self, index: usize) -> Option<Option<&Match>> {
+        if index >= self.captures.len() { 
+            return None;
+        }
+        if let Capture::Optional(ref val) = self.captures[index] {
+            Some(val.as_ref().map(|b| b.deref()))
+        } else {
+            None
+        }
+    }
+    
+    pub fn multiple(&self, index: usize) -> Option<&Vec<Match>> {
+        if index >= self.captures.len() { 
+            return None;
+        }
+        if let Capture::Multiple(ref values) = self.captures[index] {
+            Some(values)
+        } else {
+            None
+        }
+    }
+    
+    pub fn token(&self) -> Option<&Token> {
+        if self.captures.len() != 1 {
+            return None;
+        }
+        if let Capture::Token(ref token) = self.captures[0] {
+            Some(token)
+        } else {
+            None
         }
     }
 }
@@ -190,7 +225,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
     prindent!("<{}> => {})", token.name, pat.fmt());
     match *pat {
         Token(GrammarToken::Named(ref name)) => {
-            let res = if token.name.deref() == name {
+            let res = if &token.name == name {
                 MatchesToken
             } else {
                 CannotParse
@@ -202,7 +237,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
             panic!("Attempted parse without assigning token names"); 
         }
         BreakOnToken(GrammarToken::Named(ref name)) => {
-            let res = if token.name.deref() == name {
+            let res = if &token.name == name {
                 MatchesToken
             } else {
                 IsOptional
@@ -323,9 +358,15 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
         // unnamed str and unnamed regex patterns.
         Token(GrammarToken::Named(ref name)) => {
             let token = advance(tokens)?;
-            if token.name.deref() == name {
+            if &token.name == name {
                 if let Some(idx) = cap_idx {
-                    caps[idx].assign(token);
+                    let mut captures = Vec::with_capacity(1);
+                    captures.push(Capture::Token(token.clone()));
+                    let mtc = Match { 
+                        rule: name.clone(), 
+                        captures
+                    };
+                    caps[idx].assign(mtc);
                 }
             } else {
                 return error(&format!("token <{}>", name), token, ctx);
@@ -412,7 +453,7 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
             return Err(format!("{}:{}:{}: Unclosed loop expression", scope, line, col));
         }
         BreakOnToken(GrammarToken::Named(ref name)) => {
-            let should_break = tokens.peek().map_or(false, |peek| peek.name.deref() == name);
+            let should_break = tokens.peek().map_or(false, |peek| &peek.name == name);
             if should_break {
                 tokens.next().unwrap();
                 return Ok(Some(Break));

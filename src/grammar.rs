@@ -1,6 +1,7 @@
 //! Structures and methods to represent and parse Parses the 'heck' parser 
 //! grammar.
 use pest::prelude::*;
+use std::rc::Rc;
 
 const DEBUG_REDUCER: bool = false;
 
@@ -138,7 +139,7 @@ pub enum GrammarToken {
     Str(String),
     Re(String),
     // Stage 2: This is a post-parsing variant
-    Named(String),
+    Named(Rc<String>),
 }
 
 #[derive(Debug, Clone, Copy)]
