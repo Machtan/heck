@@ -1,7 +1,24 @@
 //! Structures and methods to represent and parse Parses the 'heck' parser 
 //! grammar.
 use pest::prelude::*;
+use common::*;
 use std::rc::Rc;
+
+/// Rules as returned from the parser (only structure, no semantics).
+pub type RawRules = Vec<(String, GrammarRule)>;
+
+/// Attempts to parse a set of lexing and parsing rules from the given grammar.
+pub fn parse_raw_rules(grammar: &str) -> Result<RawRules, String> {
+    let mut parser = Rdp::new(StringInput::new(grammar));
+    parser.rules();
+    if !parser.end() {
+        let (rules, strpos) = parser.expected();
+        let (line, col) = get_position(grammar, strpos);
+        Err(format!("{}:{}: Parsing error: expected one of rules: {:?}", line, col, rules))
+    } else {
+        Ok(parser.main())
+    }
+}
 
 const DEBUG_REDUCER: bool = false;
 
@@ -68,7 +85,7 @@ impl Pat {
                 match cap {
                     CaptureInfo::Unnamed => {},
                     CaptureInfo::Shared(group) => {
-                        for i in 0..group+1 {
+                        for _ in 0..group+1 {
                             s.push('$');
                         }
                     }
@@ -129,9 +146,9 @@ impl Pat {
 
 #[derive(Debug, Clone)]
 pub struct GrammarRule {
-    pub name: String,
-    pub pat: Pat,
-    pub nof_captures: usize,
+    pub(crate) name: String,
+    pub(crate) pat: Pat,
+    pub(crate) nof_captures: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -158,9 +175,6 @@ pub enum Quantifier {
     Loop,
     BreakOnToken,
 }
-
-/// Rules as returned from the parser (only structure, no semantics).
-pub type RawRules = Vec<(String, GrammarRule)>;
 
 // TODO: Stricter whitespace rules wrt captures and quantifiers
 impl_rdp! {

@@ -12,9 +12,9 @@ use captures::{CaptureType, find_and_assign_captures};
 
 #[derive(Debug, Clone)]
 pub struct ParserRule {
-    pub name: Rc<String>,
-    pub pat: Pat,
-    pub captures: Vec<CaptureType>,
+    pub(crate) name: Rc<String>,
+    pub(crate) pat: Pat,
+    pub(crate) captures: Vec<CaptureType>,
 }
 
 /// Rules that tells the parsing function how to combine tokens into structure.
