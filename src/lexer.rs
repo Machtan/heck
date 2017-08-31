@@ -8,9 +8,12 @@ use regex::Regex;
 /// Rules that tell the lexing function how to split a text into tokens.
 pub type LexerRules = Vec<TokenDef>;
 
+/// A token as described in the Heck grammar.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenDef {
+    /// A named token, ie: 'TOKEN: "token"'
     Named(String, GrammarToken),
+    /// An unnamed token, ie: 'rule: "[" expr "]"'
     Unnamed(GrammarToken),
 }
 

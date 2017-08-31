@@ -9,7 +9,7 @@ use std::vec;
 use std::ops::{Deref};
 use captures::{CaptureType, find_and_assign_captures};
 
-
+/// A named parsing pattern, with a described set of captured matches or tokens.
 #[derive(Debug, Clone)]
 pub struct ParserRule {
     pub(crate) name: Rc<String>,
@@ -20,8 +20,8 @@ pub struct ParserRule {
 /// Rules that tells the parsing function how to combine tokens into structure.
 pub type ParserRules = HashMap<String, ParserRule>;
 
-// Changes all UPPERCASE rules to named tokens, and all literal tokens to
-// named tokens as well.
+/// Changes all UPPERCASE rules to named tokens, and all literal tokens to
+/// named tokens as well.
 fn assign_token_names(pat: Pat) -> Pat {
     use grammar::Pat::*;
     match pat {
@@ -60,6 +60,7 @@ fn assign_token_names(pat: Pat) -> Pat {
     }
 }
 
+/// Finds and parses the parser rules in the given set of raw rules.
 pub fn find_parser_rules(rules: &RawRules) -> ParserRules {
     let mut parser_rules = HashMap::new();
     for (name, rule) in rules.iter().filter_map(|&(ref k, ref v)| {
@@ -86,14 +87,20 @@ pub fn find_parser_rules(rules: &RawRules) -> ParserRules {
     parser_rules
 }
 
+/// Describes the value of a Rule or Token matched and captured by a '$' capture pattern.
 #[derive(Debug, Clone)]
 pub enum Capture {
+    /// A single value that is always present.
     Single(Box<Match>),
+    /// A value that may or may not be assigned when parsing.
     Optional(Option<Box<Match>>),
+    /// A set of zero or more values, captured by repetitions.
     Multiple(Vec<Match>),
+    /// A single token.
     Token(Token),
 }
 impl Capture {
+    /// Assigns the given value to this capture, by adding its value to this capture.
     pub fn assign(&mut self, value: Match) {
         use self::Capture::*;
         match *self {
@@ -116,12 +123,16 @@ impl Capture {
     }
 }
 
+/// Describes a matched rule, including the values that were captured by it.
 #[derive(Debug, Clone)]
 pub struct Match {
+    /// What rule was matched.
     pub rule: Rc<String>,
+    /// The values that were captured.
     pub captures: Vec<Capture>,
 }
 impl Match {
+    /// Creates a match with empty captures from a rule.
     pub fn new(rule: &ParserRule) -> Match {
         Match {
             rule: rule.name.clone(),
@@ -147,6 +158,7 @@ impl Match {
         }
     }
     
+    /// Accesses a 'single' capture value of this match at the given capture index.
     pub fn single(&self, index: usize) -> Option<&Match> {
         if index >= self.captures.len() { 
             return None;
@@ -158,6 +170,7 @@ impl Match {
         }
     }
     
+    /// Accesses an 'optional' capture value of this match at the given capture index.
     pub fn optional(&self, index: usize) -> Option<Option<&Match>> {
         if index >= self.captures.len() { 
             return None;
@@ -169,6 +182,7 @@ impl Match {
         }
     }
     
+    /// Accesses a 'multiple' capture value of this match at the given capture index.
     pub fn multiple(&self, index: usize) -> Option<&Vec<Match>> {
         if index >= self.captures.len() { 
             return None;
@@ -180,6 +194,7 @@ impl Match {
         }
     }
     
+    /// Accesses a 'token' capture value of this match at the given capture index.
     pub fn token(&self) -> Option<&Token> {
         if self.captures.len() != 1 {
             return None;
@@ -192,25 +207,34 @@ impl Match {
     }
 }
 
+/// A context used to return more meaningful errors when a parse fails.
 struct ErrContext<'a> {
     scope: Vec<Rc<String>>,
     source_text: &'a str,
 }
 
+/// A peekable token iterator.
 pub type Tokens = Peekable<vec::IntoIter<Token>>;
+
+/// The result of a parse.
 pub type ParseResult<T> = Result<T, String>;
 
+/// Signals that the current loop or repetition should be broken out of.
 #[derive(Debug)]
 struct Break;
 
+/// How a pattern would match a given token.
 #[derive(Debug)]
 enum ParseAction {
+    /// The pattern matches and consumes the pattern in one of its branches.
     MatchesToken,
-    IsOptional,
+    /// The pattern doesn't match, but is optional, so the parse can continue.
+    IgnoresToken,
+    /// All branches of the pattern expect a different token, so the parse cannot continue.
     CannotParse,
 }
 
-/// Returns whether the given token can be matched or ignored by the given pattern.
+/// Returns how the pattern would match a given token.
 fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules, 
     indent: usize) -> ParseAction 
 {
@@ -240,7 +264,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
             let res = if &token.name == name {
                 MatchesToken
             } else {
-                IsOptional
+                IgnoresToken
             };
             prindent!("-> {:?}", res);
             res
@@ -261,7 +285,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
                         prindent!("-> MatchesToken");
                         return MatchesToken;
                     }
-                    IsOptional => {}
+                    IgnoresToken => {}
                     CannotParse => {
                         prindent!("-> CannotParse");
                         return CannotParse;
@@ -269,7 +293,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
                 }
             }
             prindent!("-> IsOptional");
-            IsOptional
+            IgnoresToken
         }
         AnyOf(ref pats) => {
             let mut opt_found = false;
@@ -281,12 +305,12 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
                     }
                     // This is the correct semantics, ignoring a branch that 
                     // matches the token, if an optional branch is found first
-                    IsOptional => opt_found = true,
+                    IgnoresToken => opt_found = true,
                     CannotParse => {}
                 }
             }
             let res = if opt_found {
-                IsOptional
+                IgnoresToken
             } else {
                 CannotParse
             };
@@ -297,7 +321,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
             let res = if let MatchesToken = action_when_parsed(optpat, token, rules, indent+2) {
                 MatchesToken
             } else {
-                IsOptional
+                IgnoresToken
             };
             prindent!("-> {:?}", res);
             res
@@ -310,6 +334,7 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
     }
 }
 
+/// Parses the given token using the given pattern, with an optional index of a capture in the capture list to assign parsed matches to.
 fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut Vec<Capture>, 
     rules: &ParserRules, tokens: &mut Tokens, ctx: &mut ErrContext<'a>) -> ParseResult<Option<Break>> 
 {
@@ -340,7 +365,7 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
         if let Some(ref peek) = tokens.peek() {
             match action_when_parsed(pat, peek, rules, 0) {
                 MatchesToken => true,
-                IsOptional | CannotParse => false,
+                IgnoresToken | CannotParse => false,
             }
         } else {
             false
@@ -420,7 +445,7 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
                         pat_found = true;
                         break;
                     }
-                    IsOptional => pat_found = true,
+                    IgnoresToken => pat_found = true,
                     CannotParse => {}
                 }
             }
@@ -468,6 +493,7 @@ fn parse_with_pattern<'a>(mut pat: &Pat, mut cap_idx: Option<usize>, caps: &mut 
     Ok(None)
 }
 
+/// Parses the given tokens using the named rule.
 fn parse_with_rule<'a>(rule: &str, rules: &ParserRules, tokens: &mut Tokens, 
     ctx: &mut ErrContext<'a>) -> ParseResult<Match> 
 {
@@ -483,6 +509,7 @@ fn parse_with_rule<'a>(rule: &str, rules: &ParserRules, tokens: &mut Tokens,
     Ok(mtc)
 }
 
+/// Parses the given tokens using the named 'start' rule.
 pub fn parse_with_rules(start: &str, rules: &ParserRules, mut tokens: Vec<Token>, 
     source_text: &str) -> ParseResult<Match> 
 {
