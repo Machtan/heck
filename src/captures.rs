@@ -20,7 +20,7 @@ struct CaptureState {
 
 impl CaptureState {
     fn assign(&mut self, group: Option<usize>, context: CaptureContext) -> usize {
-        println!("CaptureState.assign({:?}, {:?})", group, context);
+        //println!("CaptureState.assign({:?}, {:?})", group, context);
         use self::CaptureContext::*;
         if let Some(group) = group {
             // The group is not the next shared one, and is much larger

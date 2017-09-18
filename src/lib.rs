@@ -2,18 +2,18 @@
 #[macro_use]
 extern crate pest;
 extern crate regex;
-extern crate radix_trie;
 
 mod common;
 mod grammar;
 pub mod lexer;
 mod captures;
 mod parser;
+mod trie;
 
 pub use grammar::{GrammarRule, RawRules, GrammarToken, parse_raw_rules};
-pub use lexer::{Token, TokenDef, find_lexer_rules, lex};
+pub use lexer::{Token, TokenDef, find_lexer_rules, lex, LexerRules};
 pub use captures::{CaptureType};
-pub use parser::{find_parser_rules, parse_with_rules, Match};
+pub use parser::{find_parser_rules, parse_with_rules, Match, ParserRules};
 
 /*
 Ideas for API design:

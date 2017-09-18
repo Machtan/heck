@@ -1,7 +1,7 @@
 
 use common::*;
 use grammar::{GrammarToken, Pat, RawRules};
-use radix_trie::{Trie, TrieCommon};
+use trie::Trie;
 use std::rc::Rc;
 use regex::Regex;
 
@@ -108,13 +108,17 @@ pub fn lex(text: &str, rules: &LexerRules) -> Result<Vec<Token>, String> {
     use self::TokenDef::*;
     let mut literals = Trie::new();
     let mut regexes = Vec::new();
+    #[inline]
+    fn is_alpha(literal: &str) -> bool {
+        literal.chars().all(|ch| ch.is_alphabetic())
+    }
     for token_def in rules {
         match *token_def {
             Named(ref name, GrammarToken::Str(ref string)) => {
-                literals.insert(string.clone(), Rc::new(name.clone()));
+                literals.insert(string, (Rc::new(name.clone()), is_alpha(string)));
             }
             Unnamed(GrammarToken::Str(ref string)) => {
-                literals.insert(string.clone(), Rc::new(string.clone()));
+                literals.insert(string, (Rc::new(string.clone()), is_alpha(string)));
             }
             Named(ref name, GrammarToken::Re(ref regex)) => {
                 let mut re = "^".to_string();
@@ -151,37 +155,49 @@ pub fn lex(text: &str, rules: &LexerRules) -> Result<Vec<Token>, String> {
     while start < text.len() {
         //println!("{}:", start);
         let slice = &text[start..];
-        if let Some(ref subtrie) = literals.get_ancestor(slice) {
-            let matched = subtrie.key().unwrap();
-            let token_name = subtrie.value().unwrap();
-            let end = start + matched.len();
-            let token = Token::new(token_name.clone(), start, end);
-            //println!("-> {}: {:?}", token_name, token.slice(text));
-            if ! token_name.starts_with("_") {
-                found_tokens.push(token);
-            }
-            start = end;
-        } else {
-            let mut found = false;
-            for &(ref regex, ref name) in &regexes {
-                if let Some(m) = regex.find(slice) {
-                    let s = start + m.start();
-                    let e = start + m.end();
-                    let token = Token::new(name.clone(), s, e);
-                    //println!("-> {}: {:?}", name, token.slice(text));
-                    if ! name.starts_with("_") {
-                        found_tokens.push(token);
+        if let Some((prefix, &(ref token_name, alpha))) = literals.find_longest_match(slice) {
+            let end = start + prefix.len();
+            // Check whether this is only the prefix of an identifier
+            let mut is_valid = true;
+            if alpha {
+                if let Some(ch) = (&text[end..]).chars().next() {
+                    if ch.is_alphabetic() {
+                        is_valid = false;
                     }
-                    start = e;
-                    found = true;
-                    break;
                 }
             }
-            if ! found {
-                let (line, col) = get_position(text, start);
-                return Err(format!("{}:{}: Could not Lex text", line, col));
+            // If the prefix isn't valid, fall through to regex matching
+            if is_valid {
+                let token = Token::new(token_name.clone(), start, end);
+                //println!("-> {}: {:?}", token_name, token.slice(text));
+                if ! token_name.starts_with("_") {
+                    found_tokens.push(token);
+                }
+                start = end;
+                continue;
             }
         }
+        // Regex matching
+        let mut found = false;
+        for &(ref regex, ref name) in &regexes {
+            if let Some(m) = regex.find(slice) {
+                let s = start + m.start();
+                let e = start + m.end();
+                let token = Token::new(name.clone(), s, e);
+                //println!("-> {}: {:?}", name, token.slice(text));
+                if ! name.starts_with("_") {
+                    found_tokens.push(token);
+                }
+                start = e;
+                found = true;
+                break;
+            }
+        }
+        if ! found {
+            let (line, col) = get_position(text, start);
+            return Err(format!("{}:{}: Could not Lex text (no rules matched)", line, col));
+        }
+        
     }
     Ok(found_tokens)
 }

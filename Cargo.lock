@@ -5,7 +5,6 @@ dependencies = [
  "argonaut 0.12.0",
  "linked-hash-map 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pest 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "radix_trie 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -20,11 +19,6 @@ dependencies = [
 [[package]]
 name = "argonaut"
 version = "0.12.0"
-
-[[package]]
-name = "endian-type"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "lazy_static"
@@ -50,23 +44,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "nibble_vec"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
 name = "pest"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "radix_trie"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "endian-type 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "nibble_vec 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "regex"
@@ -114,14 +94,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
 "checksum aho-corasick 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)" = "500909c4f87a9e52355b26626d890833e9e1d53ac566db76c36faa984b889699"
-"checksum endian-type 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 "checksum lazy_static 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "3b37545ab726dd833ec6420aaba8231c5b320814b9029ad585555d2a03e94fbf"
 "checksum libc 0.2.29 (registry+https://github.com/rust-lang/crates.io-index)" = "8a014d9226c2cc402676fbe9ea2e15dd5222cd1dd57f576b5b283178c944a264"
 "checksum linked-hash-map 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2d2aab0478615bb586559b0114d94dd8eca4fdbb73b443adcb0d00b61692b4bf"
 "checksum memchr 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1dbccc0e46f1ea47b9f17e6d67c5a96bd27030519c519c9c91327e31275a47b4"
-"checksum nibble_vec 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "62e678237a4c70c5f2b917cefd7d080dfbf800421f06e8a59d4e28ef5130fd9e"
 "checksum pest 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3e2e823a5967bb4cdc6d3e46f47baaf4ecfeae44413a642b74ad44e59e49c7f6"
-"checksum radix_trie 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6a1875ac9bb128cbc728459b9f13a40e1b4654157b39d21ea7e8b42a3cdad611"
 "checksum regex 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "1731164734096285ec2a5ec7fea5248ae2f5485b3feeb0115af4fda2183b2d1b"
 "checksum regex-syntax 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ad890a5eef7953f55427c50575c680c42841653abd2b028b68cd223d157f62db"
 "checksum thread_local 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "1697c4b57aeeb7a536b647165a2825faddffb1d3bad386d507709bd51a90bb14"

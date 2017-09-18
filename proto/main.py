@@ -417,6 +417,11 @@ def main():
     print("Scope: {}".format(scope))
     
     """
+    key:            $(KEY | STRING)
+    table_scope:    "[" $$key ( "." $$key )* "]"
+    """
+    
+    """
     Event-based parsing, streaming reducer
     """
     """

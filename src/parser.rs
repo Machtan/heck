@@ -70,8 +70,8 @@ pub fn find_parser_rules(rules: &RawRules) -> ParserRules {
             None
         }
     }) {
-        println!("Assigning rule {:?}...", name);
-        println!("  {}", rule.pat.fmt());
+        //println!("Assigning rule {:?}...", name);
+        //println!("  {}", rule.pat.fmt());
         let (captures, pat_with_captures) = find_and_assign_captures(rule.pat);
         // Clean up the pat by changing tokens to named tokens, and
         let pat_with_tokens = assign_token_names(pat_with_captures);
@@ -82,7 +82,7 @@ pub fn find_parser_rules(rules: &RawRules) -> ParserRules {
             captures: captures,
         };
         parser_rules.insert(name, rule);
-        println!("");
+        //println!("");
     }
     parser_rules
 }
@@ -204,6 +204,86 @@ impl Match {
         } else {
             None
         }
+    }
+    
+    pub fn fmt(&self, source: &str) -> String {
+        let mut s = String::new();
+        self.fmt_into(&mut s, source, 0);
+        s
+    }
+    
+    
+    fn fmt_into(&self, s: &mut String, source: &str, mut indent: usize) {
+        use self::Capture::*;
+        #[inline]
+        fn pad(s: &mut String, by: usize) {
+            s.extend(iter::repeat(' ').take(by));
+        }
+        #[inline]
+        fn is_token(mtc: &Match) -> bool {
+            mtc.rule.chars().all(|ch| ch.is_uppercase())
+        }
+        if is_token(self) {
+            s.push_str("Token<");
+            s.push_str(&self.rule);
+            s.push_str(">(");
+            s.push_str(&format!("{:?}", self.token().unwrap().slice(source)));
+            s.push_str(")>");
+            return;
+        }
+        
+        s.push_str("Match<");
+        s.push_str(&self.rule);
+        s.push_str(">{\n");
+        indent += 2;
+        for (i, cap) in self.captures.iter().enumerate() {
+            match *cap {
+                Single(ref mtc) => {
+                    pad(s, indent);
+                    s.push_str(&format!("{}): ", i));
+                    mtc.fmt_into(s, source, indent);
+                    s.push('\n');
+                }
+                Optional(ref mtc) => {
+                    pad(s, indent);
+                    s.push_str(&format!("{}?): ", i));
+                    match *mtc {
+                        Some(ref mtc) => {
+                            s.push_str("Some(");
+                            mtc.fmt_into(s, source, indent);
+                            s.push(')');
+                        }
+                        None => s.push_str("None"),
+                    }
+                    
+                    s.push('\n');
+                }
+                Multiple(ref matches) => {
+                    if matches.is_empty() {
+                        pad(s, indent);
+                        s.push_str(&format!("{}): []\n", i));
+                    } else {
+                        pad(s, indent);
+                        s.push_str(&format!("{}): [\n", i));
+                        for mtc in matches {
+                            pad(s, indent+2);
+                            mtc.fmt_into(s, source, indent+2);
+                            s.push(',');
+                        }
+                        s.push('\n');
+                        pad(s, indent);
+                        s.push(']');
+                        s.push('\n');
+                    }
+                    
+                }
+                Token(_) => unreachable!(),
+            }
+        }
+        indent -= 2;
+        pad(s, indent);
+        s.push('}');
+        
     }
 }
 

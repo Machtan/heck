@@ -282,7 +282,7 @@ impl_rdp! {
         _patseq(&self) -> Pat {
             (mut rev_pats: __patseq()) => {
                 print("_patseq:1");
-                println!("_patseq({:?})", rev_pats);
+                print(&format!("_patseq({:?})", rev_pats));
                 let has_one = rev_pats.len() == 1;
                 if has_one {
                     rev_pats.pop().unwrap()
@@ -336,7 +336,7 @@ impl_rdp! {
         _pat(&self) -> Pat {
             (capture: _capture(), pat: _inner_pat(), quantifier: _quantifier()) => {
                 print("_pat:1");
-                println!("_pat(cap: {:?}, pat: {:?}, quantifier: {:?})", capture, pat, quantifier);
+                print(&format!("_pat(cap: {:?}, pat: {:?}, quantifier: {:?})", capture, pat, quantifier));
                 let pat = if let Some(quantifier) = quantifier {
                     match quantifier {
                         Quantifier::Opt => Pat::Opt(Box::new(pat)),
