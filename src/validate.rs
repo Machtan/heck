@@ -20,10 +20,13 @@ impl GrammarError {
 }
 
 /// Runs all the various validators on the given rules.
-pub fn validate_rules(parser_rules: &ParserRules, lexer_rules: &LexerRules) -> Vec<GrammarError> {
+pub fn validate_rules(lexer_rules: &LexerRules, parser_rules: &ParserRules) -> Vec<GrammarError> {
     let mut lints = Vec::new();
     println!("heck: Validating whether the grammar is closed in...");
     validate_closed_in_with(parser_rules, lexer_rules, &mut |error| {
+        lints.push(error);
+    });
+    validate_unused_tokens_with(parser_rules, lexer_rules, &mut |error| {
         lints.push(error);
     });
     validate_endless_loops_into(parser_rules, &mut lints);
@@ -39,15 +42,6 @@ pub fn validate_rules(parser_rules: &ParserRules, lexer_rules: &LexerRules) -> V
 pub fn validate_closed_in_with<F: FnMut(GrammarError)>(parser_rules: &ParserRules, lexer_rules: &LexerRules, send_error: &mut F) {
     use lexer::TokenDef;
     use grammar::GrammarToken::*;
-    // Go through all uses, and ensure that they are in the set of defined
-    // names.
-    /*
-    pub struct ParserRule {
-    pub(crate) name: Rc<String>,
-    pub(crate) pat: Pat,
-    pub(crate) captures: Vec<CaptureType>,
-    }
-    */
     let mut bound_names: HashSet<String> = HashSet::new();
     bound_names.insert("EOF".to_string()); // EOF is always defined
     for (name, _) in parser_rules {
@@ -104,6 +98,60 @@ pub fn validate_closed_in_with<F: FnMut(GrammarError)>(parser_rules: &ParserRule
     }
     for (_, rule) in parser_rules {
         validate_pat(&rule.pat, &rule.name, &bound_names, send_error);
+    }
+}
+
+
+// TODO: Should I try to check rules for being unused too, and only allow
+// a single 'entry point' in the grammar?
+/// Validates that all named tokens are referenced by a rule.
+pub fn validate_unused_tokens_with<F: FnMut(GrammarError)>(parser_rules: &ParserRules, lexer_rules: &LexerRules, send_error: &mut F) {
+    use lexer::TokenDef;
+    let mut tokens: HashSet<String> = HashSet::new();
+    tokens.insert("EOF".to_string()); // EOF should be referenced somewhere
+    for tokendef in lexer_rules {
+        match *tokendef {
+            TokenDef::Named(ref name, _) => {
+                if ! name.starts_with("_") {
+                    tokens.insert(name.clone());
+                }
+            }
+            TokenDef::Unnamed(_) => {}
+        }
+    }
+
+    fn look_for_tokens(pat: &Pat, rule: &Rc<String>, mut tokens: &mut HashSet<String>) {
+        use grammar::Pat::*;
+        match *pat {
+            Rule(ref name) => {
+                tokens.remove(name);
+            },
+            Token(ref token) | BreakOnToken(ref token) => {
+                match *token {
+                    GrammarToken::Named(ref name) => {
+                        tokens.remove(name.deref());
+                    }
+                    _ => unreachable!("Compiled parser rules should only contain named tokens"),
+                }
+            },
+            Seq(ref pats) | AnyOf(ref pats) => {
+                for pat in pats {
+                    look_for_tokens(pat, rule, &mut tokens)
+                }
+            },
+            Cap(_, ref inner) | Opt(ref inner) |
+            ZeroPlus(ref inner) | OnePlus(ref inner) | Loop(ref inner) => {
+                look_for_tokens(inner, rule, &mut tokens);
+            }
+        }
+    }
+    for (_, rule) in parser_rules {
+        look_for_tokens(&rule.pat, &rule.name, &mut tokens);
+    }
+    if ! tokens.is_empty() {
+        for token in tokens {
+            send_error(GrammarError::new(0, format!("Unused token: <{}>", token)));
+        }
     }
 }
 

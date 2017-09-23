@@ -37,7 +37,15 @@ pub fn lex_and_parse_with_grammar(text: &str, grammar: &str, start_with_rule: &s
     let raw_rules = parse_raw_rules(grammar)?;
     let lexer_rules = find_lexer_rules(&raw_rules);
     let parser_rules = find_parser_rules(&raw_rules);
-    // TODO: validate the parser and lexer rules :p
+    let errors = validate_rules(&lexer_rules, &parser_rules);
+    if errors.len() != 0 {
+        let mut s = String::new();
+        s.push_str("Grammar errors:");
+        for (i, err) in errors.into_iter().enumerate() {
+            s.push_str(&format!("\n  {}: {}", i, err.message));
+        }
+        return Err(s);
+    }
     let tokens = lex(text, &lexer_rules)?;
     parse_with_rules(start_with_rule, &parser_rules, tokens, text)
 }
