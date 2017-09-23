@@ -240,13 +240,13 @@ impl Match {
             match *cap {
                 Single(ref mtc) => {
                     pad(s, indent);
-                    s.push_str(&format!("{}): ", i));
+                    s.push_str(&format!("{}  ", i));
                     mtc.fmt_into(s, source, indent);
                     s.push('\n');
                 }
                 Optional(ref mtc) => {
                     pad(s, indent);
-                    s.push_str(&format!("{}?): ", i));
+                    s.push_str(&format!("{}? ", i));
                     match *mtc {
                         Some(ref mtc) => {
                             s.push_str("Some(");
@@ -261,10 +261,10 @@ impl Match {
                 Multiple(ref matches) => {
                     if matches.is_empty() {
                         pad(s, indent);
-                        s.push_str(&format!("{}): []\n", i));
+                        s.push_str(&format!("{}* []\n", i));
                     } else {
                         pad(s, indent);
-                        s.push_str(&format!("{}): [\n", i));
+                        s.push_str(&format!("{}* [\n", i));
                         for mtc in matches {
                             pad(s, indent+2);
                             mtc.fmt_into(s, source, indent+2);

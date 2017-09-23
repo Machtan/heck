@@ -6,7 +6,7 @@ use argonaut::{ArgDef, parse, ParseError, help_arg, version_arg};
 use std::process;
 use std::io::{self, Read, Write};
 use std::error::Error;
-use heck::{parse_raw_rules, find_lexer_rules, find_parser_rules, lex, parse_with_rules, LexerRules, ParserRules};
+use heck::{parse_raw_rules, find_lexer_rules, find_parser_rules, lex, parse_with_rules, LexerRules, ParserRules, validate_rules};
 use std::path::Path;
 use std::fs::File;
 
@@ -42,6 +42,8 @@ pub fn try_parse(source: &str, lexer_rules: &LexerRules, parser_rules: &ParserRu
     None
 }
 
+const INVALID_GRAMMAR: i32 = 4;
+
 pub fn run_prompt(grammar: &str) -> Option<i32> {
     let raw_rules = match parse_raw_rules(grammar) {
         Ok(rules) => rules,
@@ -52,6 +54,16 @@ pub fn run_prompt(grammar: &str) -> Option<i32> {
     };
     let lexer_rules = find_lexer_rules(&raw_rules);
     let parser_rules = find_parser_rules(&raw_rules);
+    let lints = validate_rules(&parser_rules, &lexer_rules);
+    if ! lints.is_empty() {
+        println!("The grammar has the following errors:");
+        for (i, lint) in lints.iter().enumerate() {
+            println!("{})", i+1);
+            println!("{}", lint.message);
+            println!("");
+        }
+        return Some(INVALID_GRAMMAR);
+    }
 
     println!("Welcome to the heck prompt. 
 Type text in the current grammar to let heck try to parse it.
@@ -155,6 +167,16 @@ fn argonaut_main() -> Option<i32> {
         };
         let lexer_rules = find_lexer_rules(&raw_rules);
         let parser_rules = find_parser_rules(&raw_rules);
+        let lints = validate_rules(&parser_rules, &lexer_rules);
+        if ! lints.is_empty() {
+            println!("The grammar has the following errors:");
+            for (i, lint) in lints.iter().enumerate() {
+                println!("{})", i+1);
+                println!("{}", lint.message);
+                println!("");
+            }
+            return Some(INVALID_GRAMMAR);
+        }
         try_parse(&source, &lexer_rules, &parser_rules)
     } else {
         run_prompt(&grammar);

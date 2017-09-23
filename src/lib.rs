@@ -9,11 +9,18 @@ pub mod lexer;
 mod captures;
 mod parser;
 mod trie;
+mod validate;
 
 pub use grammar::{GrammarRule, RawRules, GrammarToken, parse_raw_rules};
 pub use lexer::{Token, TokenDef, find_lexer_rules, lex, LexerRules};
 pub use captures::{CaptureType};
 pub use parser::{find_parser_rules, parse_with_rules, Match, ParserRules};
+pub use validate::{
+    validate_closed_in_with, 
+    validate_endless_loops_into, 
+    validate_left_recursion_into,
+    validate_rules
+};
 
 /*
 Ideas for API design:
