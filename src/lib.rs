@@ -42,7 +42,7 @@ pub fn lex_and_parse_with_grammar(text: &str, grammar: &str, start_with_rule: &s
         let mut s = String::new();
         s.push_str("Grammar errors:");
         for (i, err) in errors.into_iter().enumerate() {
-            s.push_str(&format!("\n  {}: {}", i, err.message));
+            s.push_str(&format!("\n  {}: {}", i+1, err.message));
         }
         return Err(s);
     }
