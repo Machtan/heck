@@ -7,6 +7,7 @@ use std::process;
 use std::io::{self, Read, Write};
 use std::error::Error;
 use heck::{parse_raw_rules, find_lexer_rules, find_parser_rules, lex, parse_with_rules, LexerRules, ParserRules, validate_rules};
+use heck::generate_reducer_signatures;
 use std::path::Path;
 use std::fs::File;
 
@@ -17,7 +18,7 @@ fn main() {
     }
 }
 
-pub fn try_parse(source: &str, lexer_rules: &LexerRules, parser_rules: &ParserRules) -> Option<i32> {
+pub fn try_parse(source: &str, lexer_rules: &LexerRules, parser_rules: &ParserRules, verbose: bool) -> Option<i32> {
     println!("Parsing...");
     let tokens = match lex(source, &lexer_rules) {
         Ok(tokens) => tokens,
@@ -26,11 +27,13 @@ pub fn try_parse(source: &str, lexer_rules: &LexerRules, parser_rules: &ParserRu
             return Some(2);
         }
     };
-    println!("Parsed tokens:");
-    for token in &tokens {
-        println!("  {:?}", token);
+    if verbose {
+        println!("Parsed tokens:");
+        for token in &tokens {
+            println!("  {:?}", token);
+        }
     }
-
+    
     let mtc = match parse_with_rules("program", &parser_rules, tokens, source) {
         Ok(mtc) => mtc,
         Err(err) => {
@@ -44,7 +47,7 @@ pub fn try_parse(source: &str, lexer_rules: &LexerRules, parser_rules: &ParserRu
 
 const INVALID_GRAMMAR: i32 = 4;
 
-pub fn run_prompt(grammar: &str) -> Option<i32> {
+pub fn run_prompt(grammar: &str, verbose: bool) -> Option<i32> {
     let raw_rules = match parse_raw_rules(grammar) {
         Ok(rules) => rules,
         Err(err) => {
@@ -54,10 +57,10 @@ pub fn run_prompt(grammar: &str) -> Option<i32> {
     };
     let lexer_rules = find_lexer_rules(&raw_rules);
     let parser_rules = find_parser_rules(&raw_rules);
-    let lints = validate_rules(&lexer_rules, &parser_rules);
-    if ! lints.is_empty() {
+    let grammar_errors = validate_rules(&lexer_rules, &parser_rules);
+    if ! grammar_errors.is_empty() {
         println!("The grammar has the following errors:");
-        for (i, lint) in lints.iter().enumerate() {
+        for (i, lint) in grammar_errors.iter().enumerate() {
             println!("{})", i+1);
             println!("{}", lint.message);
             println!("");
@@ -82,7 +85,7 @@ Type 'quit' to quit.");
         if input.trim() == "quit" {
             break;
         }
-        match try_parse(&input, &lexer_rules, &parser_rules) {
+        match try_parse(&input, &lexer_rules, &parser_rules, verbose) {
             Some(_errno) => prompt = "! ",
             None => prompt = "> ",
         }
@@ -96,7 +99,9 @@ fn argonaut_main() -> Option<i32> {
     // Set variables
     let mut grammar_file = String::new();
     let mut source_file: Option<String> = None;
-    let mut validate = false;
+    let mut do_validate = false;
+    let mut do_generate_signatures = false;
+    let mut verbose = false;
 
     let description = "
         Program for testing and validating HECK grammars.
@@ -111,9 +116,17 @@ fn argonaut_main() -> Option<i32> {
             .short("i")
             .help("An optional source file to try to parse")
 
-        , ArgDef::flag("validate", &mut validate)
+        , ArgDef::flag("validate", &mut do_validate)
             .short("v")
             .help("Validates the grammar, without starting the REPL")
+        
+        , ArgDef::flag("generate-signatures", &mut do_generate_signatures)
+            .short("g")
+            .help("Generates signatures for reducer functions for the productions (rules) in this grammar.")
+        
+        , ArgDef::flag("verbose", &mut verbose)
+            .short("d")
+            .help("Prints the tokens when lexing.")
         
         , help_arg(description).short("h")
         , version_arg()
@@ -140,24 +153,22 @@ fn argonaut_main() -> Option<i32> {
             return Some(1);
         }
     };
+    
     let mut grammar = String::new();
     if let Err(err) = file.read_to_string(&mut grammar) {
         println!("Could not read grammar file: {}", err.description());
         return Some(1);
     }
-    if let Some(source_file) = source_file {
-        let mut sf = match File::open(&source_file) {
-            Ok(sf) => sf,
-            Err(err) => {
-                println!("Could not open source file: {}", err.description());
-                return Some(1);
-            }
-        };
-        let mut source = String::new();
-        if let Err(err) = sf.read_to_string(&mut source) {
-            println!("Could not read source file: {}", err.description());
-            return Some(1);
-        }
+
+    let read_grammar_now = 
+          do_validate 
+        || do_generate_signatures 
+        || source_file.is_some();
+    
+    if ! read_grammar_now {
+        run_prompt(&grammar, verbose);
+        None
+    } else {
         let raw_rules = match parse_raw_rules(&grammar) {
             Ok(rules) => rules,
             Err(err) => {
@@ -167,18 +178,46 @@ fn argonaut_main() -> Option<i32> {
         };
         let lexer_rules = find_lexer_rules(&raw_rules);
         let parser_rules = find_parser_rules(&raw_rules);
-        let lints = validate_rules(&lexer_rules, &parser_rules);
-        if ! lints.is_empty() {
+        let grammar_errors = validate_rules(&lexer_rules, &parser_rules);
+        if ! grammar_errors.is_empty() {
             println!("The grammar has the following errors:");
-            for (i, lint) in lints.iter().enumerate() {
+            for (i, lint) in grammar_errors.iter().enumerate() {
                 println!("  {}: {}", i+1, lint.message);
             }
             return Some(INVALID_GRAMMAR);
         }
-        try_parse(&source, &lexer_rules, &parser_rules)
-    } else {
-        run_prompt(&grammar);
-        None
+
+        if do_validate {
+            // We're done after validating :)
+            return None;
+        }
+
+        if do_generate_signatures {
+            for signature in generate_reducer_signatures(&parser_rules) {
+                println!("{}", signature);
+                println!("");
+            }
+            return None;
+        }
+
+        if let Some(source_file) = source_file {
+            let mut sf = match File::open(&source_file) {
+                Ok(sf) => sf,
+                Err(err) => {
+                    println!("Could not open source file: {}", err.description());
+                    return Some(1);
+                }
+            };
+            let mut source = String::new();
+            if let Err(err) = sf.read_to_string(&mut source) {
+                println!("Could not read source file: {}", err.description());
+                return Some(1);
+            }
+            
+            try_parse(&source, &lexer_rules, &parser_rules, verbose)
+        } else {
+            unreachable!();
+        }
     }
 }
 

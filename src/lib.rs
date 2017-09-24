@@ -10,17 +10,20 @@ mod captures;
 mod parser;
 mod trie;
 mod validate;
+mod codegen;
 
 pub use grammar::{GrammarRule, RawRules, GrammarToken, parse_raw_rules};
 pub use lexer::{Token, TokenDef, find_lexer_rules, lex, LexerRules};
 pub use captures::{CaptureType};
 pub use parser::{find_parser_rules, parse_with_rules, Match, ParserRules};
 pub use validate::{
+    validate_rules,
     validate_closed_in_with, 
+    validate_unused_tokens_with,
     validate_endless_loops_into, 
     validate_left_recursion_into,
-    validate_rules
 };
+pub use codegen::generate_reducer_signatures;
 
 /*
 Ideas for API design:

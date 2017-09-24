@@ -320,12 +320,18 @@ fn action_when_parsed<'a>(pat: &'a Pat, token: &Token, rules: &'a ParserRules,
 {
     use grammar::Pat::*;
     use self::ParseAction::*;
+    #[cfg(feature="debug")]
     macro_rules! prindent {
         ($($e:expr),*) => {{
             let pad = iter::repeat(" ").take(indent).collect::<String>();
             println!("{}{}", pad, format!($($e),*));
         }}
     }
+    #[cfg(not(feature="debug"))]
+    macro_rules! prindent {
+        ($($e:expr),*) => {}
+    }
+
     prindent!("<{}> => {})", token.name, pat.fmt());
     match *pat {
         Token(GrammarToken::Named(ref name)) => {

@@ -22,7 +22,7 @@ impl GrammarError {
 /// Runs all the various validators on the given rules.
 pub fn validate_rules(lexer_rules: &LexerRules, parser_rules: &ParserRules) -> Vec<GrammarError> {
     let mut lints = Vec::new();
-    println!("heck: Validating whether the grammar is closed in...");
+    //eprintln!("heck: Validating whether the grammar is closed in...");
     validate_closed_in_with(parser_rules, lexer_rules, &mut |error| {
         lints.push(error);
     });
