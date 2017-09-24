@@ -188,7 +188,9 @@ impl_rdp! {
         
         newline     =  _{ ["\n"] | ["\r\n"] }
         whitespace  =  _{ [" "] | ["\t"] }
-        ruledef     =   { rule_name ~ colon ~ pats_or_or ~ (newline | eoi) }
+        ruledef     =   { rule_name ~ cap_names? ~ colon ~ pats_or_or ~ (newline | eoi) }
+        cap_names   =   { paropen ~ cap_name ~ ([","] ~ cap_name)* ~ parclose }
+        cap_name    =   { rule_name } // Same rules make sense, I guess
         patseq      =   { pat+ }
         patseq_nl   =   { (pat_nl ~ newline*)+ }
         pats_or_or  =   { patseq ~ (line ~ patseq)* }
@@ -241,8 +243,29 @@ impl_rdp! {
         }
         
         _ruledef(&self) -> GrammarRule {
-            (_: rule_name, name: _rule_name(), _: pats_or_or, pat: _pats_or_or()) => {
+            (name: _rule_name(), caps: _cap_names(), _: pats_or_or, pat: _pats_or_or()) => {
+                let _ = caps; // TODO add to data types
                 GrammarRule { name, pat, nof_captures: 1 }
+            }
+        }
+
+        _cap_names(&self) -> Vec<String> {
+            (_: cap_names, _: paropen, mut rev_names: __cap_names()) => {
+                rev_names.reverse();
+                rev_names
+            },
+            () => {
+                Vec::new()
+            }
+        }
+        
+        __cap_names(&self) -> Vec<String> {
+            (_: cap_name, name: _rule_name(), mut tail: __cap_names()) => {
+                tail.push(name);
+                tail
+            },
+            (_: parclose) => {
+                Vec::new()
             }
         }
         
