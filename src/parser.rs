@@ -14,7 +14,8 @@ use captures::{CaptureType, find_and_assign_captures};
 pub struct ParserRule {
     pub(crate) name: Rc<String>,
     pub(crate) pat: Pat,
-    pub(crate) captures: Vec<CaptureType>,
+    // Vec<(group_name?, captype)>
+    pub(crate) captures: Vec<(Option<String>, CaptureType)>,
 }
 
 /// Rules that tells the parsing function how to combine tokens into structure.
@@ -73,13 +74,19 @@ pub fn find_parser_rules(rules: &RawRules) -> ParserRules {
         //println!("Assigning rule {:?}...", name);
         //println!("  {}", rule.pat.fmt());
         let (captures, pat_with_captures) = find_and_assign_captures(rule.pat);
+        let mut caps = Vec::new();
+        // Add the names, but don't validate yet.
+        for (i, cap) in captures.into_iter().enumerate() {
+            // Unnecessary clone /o/
+            caps.push((rule.capture_names.get(i).map(|s| s.clone()), cap));
+        }
         // Clean up the pat by changing tokens to named tokens, and
         let pat_with_tokens = assign_token_names(pat_with_captures);
         // TOKEN rules to named tokens as well.
         let rule = ParserRule {
             name: Rc::new(name.clone()),
             pat: pat_with_tokens,
-            captures: captures,
+            captures: caps,
         };
         parser_rules.insert(name, rule);
         //println!("");
@@ -136,7 +143,7 @@ impl Match {
     pub fn new(rule: &ParserRule) -> Match {
         Match {
             rule: rule.name.clone(),
-            captures: rule.captures.iter().map(|ct| {
+            captures: rule.captures.iter().map(|&(_, ref ct)| {
                 use captures::CaptureType::*;
                 match *ct {
                     Single => {

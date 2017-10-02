@@ -19,7 +19,7 @@ impl<T: Debug> Trie<T> {
     }
     
     #[inline]
-    pub fn find_shortest_match<'n, 'k>(&'n self, key: &'k str) -> Option<(&'k str, &'n T)> {
+    pub fn _find_shortest_match<'n, 'k>(&'n self, key: &'k str) -> Option<(&'k str, &'n T)> {
         self.top.find_closest_value(key).map(|(prefix, node)| {
             (prefix, node.value.as_ref().unwrap())
         }) 
@@ -30,7 +30,7 @@ impl<T: Debug> Trie<T> {
         self.top.insert(key, value);
     }
     
-    pub fn remove(&mut self, key: &str) -> Option<T> {
+    pub fn _remove(&mut self, key: &str) -> Option<T> {
         let mut node = Some(&mut self.top);
         for ch in key.chars() {
             if let Some(child) = node.take().unwrap().leaves.get_mut(&ch) {
@@ -43,7 +43,7 @@ impl<T: Debug> Trie<T> {
     }
     
     #[inline]
-    pub fn clear(&mut self) {
+    pub fn _clear(&mut self) {
         self.top.value = None;
         self.top.leaves.clear();
     }

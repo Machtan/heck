@@ -30,21 +30,26 @@ pub fn generate_reducer_signatures(parser_rules: &ParserRules) -> Vec<String> {
         signature.push_str(&format!(
             "fn reduce_{}(m: &Match, source: &str) -> T {{", rule.name
         ));
-        for (i, &cap) in rule.captures.iter().enumerate() {
+        for (i, &(ref name, cap)) in rule.captures.iter().enumerate() {
+            let capname = if let &Some(ref name) = name {
+                name.clone()
+            } else {
+                format!("cap_{}", i)
+            };
             match cap {
                 Single => {
                     signature.push_str(&format!(
-                        "\n    let arg_{} = m.single({}).unwrap();", i, i
+                        "\n    let {} = m.single({}).unwrap();", capname, i
                     ));
                 }
                 Optional => {
                     signature.push_str(&format!(
-                        "\n    let arg_{} = m.optional({}).unwrap();", i, i
+                        "\n    let {} = m.optional({}).unwrap();", capname, i
                     ));
                 }
                 Multiple => {
                     signature.push_str(&format!(
-                        "\n    for arg_{} in m.multiple({}).unwrap() {{\n        \n    }}", i, i
+                        "\n    for {} in m.multiple({}).unwrap() {{\n        \n    }}", capname, i
                     ));
                 }
             }

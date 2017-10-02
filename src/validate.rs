@@ -29,9 +29,33 @@ pub fn validate_rules(lexer_rules: &LexerRules, parser_rules: &ParserRules) -> V
     validate_unused_tokens_with(parser_rules, lexer_rules, &mut |error| {
         lints.push(error);
     });
+    validate_all_groups_named_with(parser_rules, &mut |error| {
+        lints.push(error);
+    });
     validate_endless_loops_into(parser_rules, &mut lints);
     validate_left_recursion_into(parser_rules, &mut lints);
     lints
+}
+
+/// Validates that a rule either has no capture group names, or that all
+/// capture groups have a name.
+pub fn validate_all_groups_named_with<F: FnMut(GrammarError)>(parser_rules: &ParserRules, send_error: &mut F) {
+    for (_, rule) in parser_rules {
+        if rule.captures.is_empty() {
+            continue;
+        }
+        let has_names = rule.captures[0].0.is_some();
+        if has_names {
+            let nof_names = rule.captures.iter().filter(|&&(ref name, _)| {
+                name.is_some()
+            }).count();
+            if nof_names != rule.captures.len() {
+                send_error(GrammarError::new(0, 
+                    format!("{}: Rule has {} capture groups, but names only {}.", 
+                    rule.name, rule.captures.len(), nof_names)));
+            }
+        }
+    }
 }
 
 // TODO: Keep track of the source of the various rules, so that I can point
@@ -158,14 +182,14 @@ pub fn validate_unused_tokens_with<F: FnMut(GrammarError)>(parser_rules: &Parser
 /// Validates that uses of the 'endless loop' ('%') operator only contain
 /// patterns that have at least one mandatory token read in them, meaning
 /// that they always advance the token stream and thus won't loop forever.
-pub fn validate_endless_loops_into(parser_rules: &ParserRules, lints: &mut Vec<GrammarError>) {
+pub fn validate_endless_loops_into(_parser_rules: &ParserRules, _lints: &mut Vec<GrammarError>) {
     // Find the endless loops, and validate their sequence
 }
 
 /// Validates that the grammar doesn't contain left-recursive items, so that
 /// it won't get stuck in an endless loop trying to read a recursive set of
 /// rules.
-pub fn validate_left_recursion_into(parser_rules: &ParserRules, lints: &mut Vec<GrammarError>) {
+pub fn validate_left_recursion_into(_parser_rules: &ParserRules, _lints: &mut Vec<GrammarError>) {
     // Check which set of rules are reachable from the beginning of each rule,
     // and raise an error if the current rule is in it.
 }
