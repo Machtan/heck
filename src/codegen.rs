@@ -1,5 +1,7 @@
 
 use parser::ParserRules;
+use std::collections::HashSet;
+use std::ops::Deref;
 
 /*
 Example signatures:
@@ -25,32 +27,55 @@ fn reduce_entry(m: &Match, source: &str) -> TomlResult<(String, TomlValue)> {
 pub fn generate_reducer_signatures(parser_rules: &ParserRules) -> Vec<String> {
     use captures::CaptureType::*;
     let mut signatures = Vec::new();
+    let rule_names = parser_rules.iter().map(|(ref name, _)| name.clone()).collect::<HashSet<_>>();
     for (_, ref rule) in parser_rules {
         let mut signature = String::new();
         signature.push_str(&format!(
             "fn reduce_{}(m: &Match, source: &str) -> T {{", rule.name
         ));
         for (i, &(ref name, cap)) in rule.captures.iter().enumerate() {
+            let mut reducer = None;
             let capname = if let &Some(ref name) = name {
+                if (name != rule.name.deref()) && rule_names.contains(name) {
+                    reducer = Some(name.clone());
+                }
                 name.clone()
             } else {
                 format!("cap_{}", i)
             };
             match cap {
                 Single => {
-                    signature.push_str(&format!(
-                        "\n    let {} = m.single({}).unwrap();", capname, i
-                    ));
+                    signature.push_str(&if let Some(reducer) = reducer {
+                        format!(
+                            "\n    let {} = reduce_{}(m.single({}).unwrap(), source);", capname, reducer, i
+                        )
+                    } else {
+                        format!(
+                            "\n    let {} = m.single({}).unwrap();", capname, i
+                        )
+                    });
                 }
                 Optional => {
-                    signature.push_str(&format!(
-                        "\n    let {} = m.optional({}).unwrap();", capname, i
-                    ));
+                    signature.push_str(&if let Some(reducer) = reducer {
+                        format!(
+                            "\n    let {} = reduce_{}(m.optional({}).unwrap(), source);", capname, reducer, i
+                        )
+                    } else {
+                        format!(
+                            "\n    let {} = m.optional({}).unwrap();", capname, i
+                        )
+                    });
                 }
                 Multiple => {
-                    signature.push_str(&format!(
-                        "\n    for {} in m.multiple({}).unwrap() {{\n        \n    }}", capname, i
-                    ));
+                    signature.push_str(&if let Some(reducer) = reducer {
+                        format!(
+                            "\n    for cap in m.multiple({}).unwrap() {{\n        let {} = reduce_{}(cap, source);\n    }}", i, capname, reducer
+                        )
+                    } else {
+                        format!(
+                            "\n    for {} in m.multiple({}).unwrap() {{\n        \n    }}", capname, i
+                        )
+                    });
                 }
             }
         }
