@@ -4,10 +4,14 @@
 use grammar::{CaptureInfo, Pat};
 use std::cmp;
 
+/// Describes how many values are captured by one of a rule's capture groups.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CaptureType {
+    /// A value is always captured.
     Single,
+    /// A value might be captured.
     Optional,
+    /// Zero or more values are captured.
     Multiple,
 }
 
@@ -147,6 +151,10 @@ enum CaptureContext {
     Repetition,
 }
 
+/// Finds out how many subpatterns are captured by the given pattern, and how
+/// many values can be present in each group after parsing.
+/// The pattern is changed to have each capture be 'assigned', knowing which
+/// capture group that its subpattern should be added to.
 pub fn find_and_assign_captures(pat: Pat) -> (Vec<CaptureType>, Pat) {
     fn is_single(pat: &Pat) -> bool {
         match *pat {

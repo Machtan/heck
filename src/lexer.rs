@@ -1,3 +1,5 @@
+//! Functions and types to lex a text, that is, split the text into 
+//! syntactically meaningful bites.
 
 use common::*;
 use grammar::{GrammarToken, Pat, RawRules};

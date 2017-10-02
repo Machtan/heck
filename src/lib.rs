@@ -1,4 +1,8 @@
 #![recursion_limit="200"]
+#![deny(missing_docs)]
+//! Parses a lexer/parser specification in the HECK language, and defines
+//! functions and data types to lex/parse using the described logic.
+
 #[macro_use]
 extern crate pest;
 extern crate regex;
@@ -34,6 +38,9 @@ What do I expose, and what would be convenient?
 
 */
 
+/// Reads lexer and parser specifications from the given grammar, and attempts
+/// to parse the given text with them, starting the parse at the rule with the
+/// given rule name.
 pub fn lex_and_parse_with_grammar(text: &str, grammar: &str, start_with_rule: &str) 
     -> Result<Match, String> 
 {

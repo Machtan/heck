@@ -206,6 +206,7 @@ impl Match {
         }
     }
     
+    /// Formats the match for pretty-printing.
     pub fn fmt(&self, source: &str) -> String {
         let mut s = String::new();
         self.fmt_into(&mut s, source, 0);

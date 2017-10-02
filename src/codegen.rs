@@ -18,6 +18,10 @@ fn reduce_entry(m: &Match, source: &str) -> TomlResult<(String, TomlValue)> {
 
 */
 
+/// Returns a list containing source code for functions to 'reduce' a match to
+/// some kind of AST or value. Each parser rule in the given list will have
+/// a corresponding signature with its name, in which the capture groups of
+/// the match for this rule are properly unwrapped.
 pub fn generate_reducer_signatures(parser_rules: &ParserRules) -> Vec<String> {
     use captures::CaptureType::*;
     let mut signatures = Vec::new();

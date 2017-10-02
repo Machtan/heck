@@ -144,35 +144,59 @@ impl Pat {
     }
 }
 
+/// Describes how to parse a token stream into a structural AST.
 #[derive(Debug, Clone)]
 pub struct GrammarRule {
+    /// The name used to identify this rule in the grammar.
     pub(crate) name: String,
+    /// The pattern that this rule should parse.
     pub(crate) pat: Pat,
+    /// The number of capture groups in the pattern of this rule.
+    /// Defaults to 1, until the captures have been assigned by
+    /// 'find_and_assign_captures'.
     pub(crate) nof_captures: usize,
+    /// Names for the capture group. Might be empty.
+    pub(crate) capture_names: Vec<String>,
 }
 
+/// Describes a text token.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GrammarToken {
+    /// A fixed string, eg: "var"
     Str(String),
+    /// A pattern matching this regular expression, eg: r"[a-zA-Z]+"
     Re(String),
-    // Stage 2: This is a post-parsing variant
+    /// Refers to a token with the given id.
+    /// Assigned by 'find_parser_rules'.
     Named(Rc<String>),
 }
 
+/// Describes what kind of capture this is.
 #[derive(Debug, Clone, Copy)]
 pub enum CaptureInfo {
+    /// The capture is a capture group with a new id.
     Unnamed,
+    /// The capture group is a shared capture group with the given id.
+    /// A shared capture group is one that multiple subpatterns share and will
+    /// be assigned to.
     Shared(usize),
-    // Stage 2: This is assigned later, and not by the parser
+    /// 
+    /// Stage 2: This is assigned later, and not by the parser
     Assigned(usize),
 }
 
+/// Describes how many times a pattern should be parsed.
 #[derive(Debug, Clone)]
 pub enum Quantifier {
+    /// Zero or one time.
     Opt,
+    /// Zero or more times.
     ZeroPlus,
+    /// One or more times.
     OnePlus,
+    /// Until the loop is broken, or the internal pattern cannot be parsed.
     Loop,
+    /// The pattern should break the loop it is inside, if the given token is found.
     BreakOnToken,
 }
 
@@ -243,9 +267,8 @@ impl_rdp! {
         }
         
         _ruledef(&self) -> GrammarRule {
-            (name: _rule_name(), caps: _cap_names(), _: pats_or_or, pat: _pats_or_or()) => {
-                let _ = caps; // TODO add to data types
-                GrammarRule { name, pat, nof_captures: 1 }
+            (name: _rule_name(), capture_names: _cap_names(), _: pats_or_or, pat: _pats_or_or()) => {
+                GrammarRule { name, pat, capture_names, nof_captures: 1 }
             }
         }
 
