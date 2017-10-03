@@ -15,18 +15,28 @@ KEY:        r#"[a-zA-Z_][a-zA-Z_0-9\-]*"#
 FLOAT:      r#"(?:\+|-)[0-9](?:_?[0-9])*\.(?:[0-9](?:_?[0-9])*)?"#
 INT:        r#"(?:\+|-)[0-9](_?[0-9])*"#
 
-key:    $(KEY | STRING)
-endl:   NEWLINE
-end:    (EOF | NEWLINE)
-table_scope:  "[" $$key ( "." $$key )* "]"
-aot_scope: "[[" $$key ( "." $$key )* "]]"
-array:  "[" endl* "]"! $$expr "]"! ("," endl* "]"! $$expr endl* "]"!)%
-expr:   $(INT | FLOAT | STRING | array | inline_table | TRUE | FALSE)
-entry:  $key "=" $expr
-inline_table: "{" endl* "}"! $$entry "}"! ("," endl* "}"! $$entry endl* "}"!)%
+key:
+    $(KEY | STRING)
+endl:
+    NEWLINE
+end:
+    (EOF | NEWLINE)
+table_scope:
+    "[" $$key ( "." $$key )* "]"
+aot_scope:
+    "[[" $$key ( "." $$key )* "]]"
+array:
+    "[" endl* "]"! $$expr "]"! ("," endl* "]"! $$expr endl* "]"!)%
+expr:
+    $(INT | FLOAT | STRING | array | inline_table | TRUE | FALSE)
+entry:
+    $key "=" $expr
+inline_table:
+    "{" endl* "}"! $$entry "}"! ("," endl* "}"! $$entry endl* "}"!)%
 
 
-document:   (($$entry | $$aot_scope | $$table_scope)? end)+
+document:
+    (($$entry | $$aot_scope | $$table_scope)? end)+
 
 "##;
 

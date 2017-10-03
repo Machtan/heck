@@ -212,7 +212,11 @@ impl_rdp! {
         
         newline     =  _{ ["\n"] | ["\r\n"] }
         whitespace  =  _{ [" "] | ["\t"] }
-        ruledef     =   { rule_name ~ cap_names? ~ colon ~ pats_or_or ~ (newline | eoi) }
+        ruledef     =   { 
+            rule_name ~ cap_names? ~ colon ~ 
+            newline* ~ 
+            pats_or_or ~ (newline | eoi) 
+        }
         cap_names   =   { paropen ~ cap_name ~ ([","] ~ cap_name)* ~ parclose }
         cap_name    =   { rule_name } // Same rules make sense, I guess
         patseq      =   { pat+ }
