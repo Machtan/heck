@@ -3,9 +3,9 @@
 use parser::ParserRules;
 use lexer::LexerRules;
 use std::rc::Rc;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::ops::Deref;
-use grammar::{Pat, GrammarToken};
+use grammar::{RawRules, Pat, GrammarToken};
 
 pub struct GrammarError {
     pub pos: usize, // useless atm.
@@ -20,7 +20,7 @@ impl GrammarError {
 }
 
 /// Runs all the various validators on the given rules.
-pub fn validate_rules(lexer_rules: &LexerRules, parser_rules: &ParserRules) -> Vec<GrammarError> {
+pub fn validate_rules(raw_rules: &RawRules, lexer_rules: &LexerRules, parser_rules: &ParserRules) -> Vec<GrammarError> {
     let mut lints = Vec::new();
     //eprintln!("heck: Validating whether the grammar is closed in...");
     validate_closed_in_with(parser_rules, lexer_rules, &mut |error| {
@@ -32,9 +32,27 @@ pub fn validate_rules(lexer_rules: &LexerRules, parser_rules: &ParserRules) -> V
     validate_all_groups_named_with(parser_rules, &mut |error| {
         lints.push(error);
     });
+    validate_no_duplicate_rule_names(raw_rules, &mut |error| {
+        lints.push(error);
+    });
     validate_endless_loops_into(parser_rules, &mut lints);
     validate_left_recursion_into(parser_rules, &mut lints);
     lints
+}
+
+pub fn validate_no_duplicate_rule_names<F: FnMut(GrammarError)>(raw_rules: &RawRules, send_error: &mut F ) {
+    let mut definition_count = HashMap::new();
+    for &(ref name, _) in raw_rules {
+        let count = definition_count.entry(name.clone()).or_insert(0);
+        *count += 1;
+    }
+    for (name, count) in definition_count {
+        if count > 1 {
+            send_error(GrammarError::new(0, format!(
+                "Rule with name '{}' defined {} times!", name, count
+            )));
+        }
+    }
 }
 
 /// Validates that a rule either has no capture group names, or that all

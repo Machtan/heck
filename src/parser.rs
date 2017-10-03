@@ -212,6 +212,11 @@ impl Match {
             None
         }
     }
+
+    /// Accesses the token in the capture value of this match at the given capture index.
+    pub fn single_token(&self, index: usize) -> Option<&Token> {
+        self.single(index).and_then(|m| m.token())
+    }
     
     /// Formats the match for pretty-printing.
     pub fn fmt(&self, source: &str) -> String {

@@ -57,7 +57,7 @@ pub fn run_prompt(grammar: &str, verbose: bool) -> Option<i32> {
     };
     let lexer_rules = find_lexer_rules(&raw_rules);
     let parser_rules = find_parser_rules(&raw_rules);
-    let grammar_errors = validate_rules(&lexer_rules, &parser_rules);
+    let grammar_errors = validate_rules(&raw_rules, &lexer_rules, &parser_rules);
     if ! grammar_errors.is_empty() {
         println!("The grammar has the following errors:");
         for (i, lint) in grammar_errors.iter().enumerate() {
@@ -178,7 +178,7 @@ fn argonaut_main() -> Option<i32> {
         };
         let lexer_rules = find_lexer_rules(&raw_rules);
         let parser_rules = find_parser_rules(&raw_rules);
-        let grammar_errors = validate_rules(&lexer_rules, &parser_rules);
+        let grammar_errors = validate_rules(&raw_rules, &lexer_rules, &parser_rules);
         if ! grammar_errors.is_empty() {
             println!("The grammar has the following errors:");
             for (i, lint) in grammar_errors.iter().enumerate() {

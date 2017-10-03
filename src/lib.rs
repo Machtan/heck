@@ -47,7 +47,7 @@ pub fn lex_and_parse_with_grammar(text: &str, grammar: &str, start_with_rule: &s
     let raw_rules = parse_raw_rules(grammar)?;
     let lexer_rules = find_lexer_rules(&raw_rules);
     let parser_rules = find_parser_rules(&raw_rules);
-    let errors = validate_rules(&lexer_rules, &parser_rules);
+    let errors = validate_rules(&raw_rules, &lexer_rules, &parser_rules);
     if errors.len() != 0 {
         let mut s = String::new();
         s.push_str("Grammar errors:");
